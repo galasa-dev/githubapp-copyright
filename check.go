@@ -26,9 +26,9 @@ var (
 )
 
 type CheckError struct {
-	Path      string
-	Message   string
-	Location  int
+	Path     string
+	Message  string
+	Location int
 }
 
 func init() {
@@ -130,23 +130,23 @@ func checkFile(webhook *Webhook, checkId int, token *string, client *http.Client
 	return nil
 }
 
-func checkJavaFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) *CheckError  {
+func checkJavaFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) *CheckError {
 	log.Printf("(%v) Checking file %v - %v\n", checkId, file.Filename, file.Sha)
 	content, err := getFileContent(token, client, &file.ContentsURL)
 	if err != nil {
 		fatalMessage := fmt.Sprintf("Failed to access the content of the file for checking - %v", err)
 		return &CheckError{
-			Path: file.Filename,
-			Message: fatalMessage,
+			Path:     file.Filename,
+			Message:  fatalMessage,
 			Location: 0,
-		}	
+		}
 	}
 
 	commentBlockLocation := javaCommentBlockPattern.FindStringIndex(content)
 	if commentBlockLocation == nil {
 		return &CheckError{
-			Path: file.Filename,
-			Message: "Did not find comment block",
+			Path:     file.Filename,
+			Message:  "Did not find comment block",
 			Location: 0,
 		}
 	}
@@ -161,27 +161,26 @@ func checkJavaFile(webhook *Webhook, checkId int, token *string, client *http.Cl
 	// last check,  the first comment block should be at the top
 	if commentBlockLocation[0] != 0 {
 		return &CheckError{
-			Path: file.Filename,
-			Message: "Comment block containing copyright should be at the top",
+			Path:     file.Filename,
+			Message:  fmt.Sprintf("Comment block containing copyright should be at the top. '%s'", copyrightPattern),
 			Location: commentBlockLocation[0],
 		}
 	}
-
 
 	// All is ok
 	return nil
 }
 
-func checkYamlFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) *CheckError  {
+func checkYamlFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) *CheckError {
 	log.Printf("(%v) Checking file %v - %v\n", checkId, file.Filename, file.Sha)
 	content, err := getFileContent(token, client, &file.ContentsURL)
 	if err != nil {
 		fatalMessage := fmt.Sprintf("Failed to access the content of the file for checking - %v", err)
 		return &CheckError{
-			Path: file.Filename,
-			Message: fatalMessage,
+			Path:     file.Filename,
+			Message:  fatalMessage,
 			Location: 0,
-		}	
+		}
 	}
 	commentBlock := ""
 	scanner := bufio.NewScanner(strings.NewReader(content))
@@ -196,12 +195,12 @@ func checkYamlFile(webhook *Webhook, checkId int, token *string, client *http.Cl
 	// check we have a comment block at the begining of the file
 	if commentBlock == "" {
 		return &CheckError{
-			Path: file.Filename,
-			Message: "A comment block is missing at the start of the file",
+			Path:     file.Filename,
+			Message:  "A comment block is missing at the start of the file",
 			Location: 0,
 		}
 	}
-	
+
 	return checkCommentBlock(&commentBlock, file)
 }
 
@@ -213,16 +212,16 @@ func checkCommentBlock(commentBlock *string, file *File) *CheckError {
 
 	if len(copyrights) <= 0 {
 		return &CheckError{
-			Path: file.Filename,
-			Message: "Did not find copyright text in first comment block",
+			Path:     file.Filename,
+			Message:  "Did not find copyright text in first comment block",
 			Location: 0,
 		}
 	}
 
 	if len(copyrights) > 1 {
 		return &CheckError{
-			Path: file.Filename,
-			Message: "Found too many copyright texts in first comment block",
+			Path:     file.Filename,
+			Message:  "Found too many copyright texts in first comment block",
 			Location: 0,
 		}
 	}
@@ -256,7 +255,6 @@ func getFileContent(token *string, client *http.Client, contentURL *string) (str
 	return string(bodyBytes), nil
 }
 
-
 func createCheckRun(webhook *Webhook, headSha *string) *string {
 	installationId := webhook.Installation.Id
 
@@ -265,12 +263,12 @@ func createCheckRun(webhook *Webhook, headSha *string) *string {
 	client := &http.Client{}
 
 	checkRun := CheckRun{
-		Name: "copyright",
+		Name:    "copyright",
 		HeadSha: headSha,
-		Status: "in_progress",
-		Output: CheckRunOutput {
-			Title: "Galasa copyright check",
-			Summary: "Checks for updated copyright years and licence text",	
+		Status:  "in_progress",
+		Output: CheckRunOutput{
+			Title:   "Galasa copyright check",
+			Summary: "Checks for updated copyright years and licence text",
 		},
 	}
 
@@ -279,7 +277,7 @@ func createCheckRun(webhook *Webhook, headSha *string) *string {
 		panic(err) // TODO
 	}
 
-	req, err := http.NewRequest("POST", webhook.Repository.RepositoryURL + "/check-runs", bytes.NewReader(checkRunBytes))
+	req, err := http.NewRequest("POST", webhook.Repository.RepositoryURL+"/check-runs", bytes.NewReader(checkRunBytes))
 	if err != nil {
 		panic(err) // TODO
 	}
@@ -301,7 +299,6 @@ func createCheckRun(webhook *Webhook, headSha *string) *string {
 		panic(resp.StatusCode) // TODO
 	}
 
-
 	var response CheckRun
 
 	err = json.Unmarshal(bodyBytes, &response)
@@ -312,20 +309,17 @@ func createCheckRun(webhook *Webhook, headSha *string) *string {
 	return response.Url
 }
 
-
-
-
 func updateCheckRun(webhook *Webhook, checkRunURL *string, errors *[]CheckError, fatalError *string) {
 	token := getToken(webhook.Installation.Id)
 
 	client := &http.Client{}
 
 	checkRun := CheckRun{
-		Name: "copyright",
+		Name:   "copyright",
 		Status: "completed",
-		Output: CheckRunOutput {
-			Title: "Galasa copyright check",
-			Summary: "Checks for updated copyright years and licence text",	
+		Output: CheckRunOutput{
+			Title:   "Galasa copyright check",
+			Summary: "Checks for updated copyright years and licence text",
 		},
 	}
 
@@ -339,12 +333,12 @@ func updateCheckRun(webhook *Webhook, checkRunURL *string, errors *[]CheckError,
 		annotations := make([]CheckRunAnnotation, 0)
 
 		for _, error := range *errors {
-			annotation := CheckRunAnnotation {
-				Path: error.Path,
-				Message: error.Message,
-				Level: "failure",
+			annotation := CheckRunAnnotation{
+				Path:      error.Path,
+				Message:   error.Message,
+				Level:     "failure",
 				StartLine: 1,
-				EndLine: 1,
+				EndLine:   1,
 			}
 			annotations = append(annotations, annotation)
 		}
