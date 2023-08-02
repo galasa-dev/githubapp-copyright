@@ -140,7 +140,7 @@ function build_executables {
     if [[ "${build_type}" == "clean" ]]; then
         h2 "Cleaning the binaries out..."
         make clean
-        rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to build binary executable galasacopyrighter programs. rc=${rc}" ; exit 1 ; fi
+        rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to build binary executable copyright checker programs. rc=${rc}" ; exit 1 ; fi
         success "Binaries cleaned up - OK"
     fi
 
@@ -148,7 +148,7 @@ function build_executables {
     set -o pipefail # Fail everything if anything in the pipeline fails. Else we are just checking the 'tee' return code.
     mkdir -p ${BASEDIR}/build
     make all | tee ${BASEDIR}/build/compile-log.txt
-    rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to build binary executable galasacopyrighter programs. rc=${rc}. See log at ${BASEDIR}/build/compile-log.txt" ; exit 1 ; fi
+    rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to build binary executable copyright checker programs. rc=${rc}. See log at ${BASEDIR}/build/compile-log.txt" ; exit 1 ; fi
     success "New binaries built - OK"
 }
 

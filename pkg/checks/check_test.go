@@ -3,10 +3,9 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package main
+package checks
 
 import (
-	//"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

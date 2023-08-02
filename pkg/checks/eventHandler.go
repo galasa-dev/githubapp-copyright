@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package main
+package checks
 
 import (
 	"encoding/json"
@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-func eventHandler(w http.ResponseWriter, r *http.Request) {
+func EventHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("Inbound event")
 
@@ -54,14 +54,12 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		go performCheckSuite(&webhook)
 	} else if webhook.CheckRun != nil {
 		go performCheckRun(&webhook)
-	} else if webhook.Action == "opened" || webhook.Action == "synchronize"  {
+	} else if webhook.Action == "opened" || webhook.Action == "synchronize" {
 		go performPullRequest(&webhook)
 	}
 
-
 	w.WriteHeader(http.StatusOK)
 }
-
 
 func performCheckSuite(webhook *Webhook) {
 
@@ -93,9 +91,8 @@ func performCheckSuite(webhook *Webhook) {
 	}
 }
 
-
 func performCheckRun(webhook *Webhook) {
-	
+
 	if webhook.Action != "rerequested" {
 		return
 	}
@@ -136,7 +133,6 @@ func performPullRequest(webhook *Webhook) {
 		}
 	}
 
-
 	checkRunURL := createCheckRun(webhook, &webhook.PullRequest.Head.Sha)
 
 	pullRequests := make([]WebhookPullRequest, 0)
@@ -149,7 +145,6 @@ func performPullRequest(webhook *Webhook) {
 	}
 
 }
-
 
 func performPullRequestChecks(webhook *Webhook, checkId int, checkRunURL *string, pullRequests *[]WebhookPullRequest) *[]CheckError {
 
@@ -173,8 +168,6 @@ func performPullRequestChecks(webhook *Webhook, checkId int, checkRunURL *string
 
 	return &errors
 }
-
-
 
 func performBeforeAfterChecks(webhook *Webhook, checkId int, checkRunURL *string, before *string, after *string) *[]CheckError {
 	log.Printf("(%v) Checking commit '%v'->'%v'", checkId, *before, *after)
@@ -201,7 +194,7 @@ func performBeforeAfterChecks(webhook *Webhook, checkId int, checkRunURL *string
 			return nil
 		}
 
-		filesURL = strings.Replace(filesURL, "{/sha}", "/" + *after, 1)
+		filesURL = strings.Replace(filesURL, "{/sha}", "/"+*after, 1)
 	}
 
 	client := &http.Client{}
@@ -214,7 +207,7 @@ func performBeforeAfterChecks(webhook *Webhook, checkId int, checkRunURL *string
 			setAdhocError(webhook, checkId, checkRunURL, fatalError)
 			return nil
 		}
-		req.Header.Add("Authorization", "Bearer "+ token)
+		req.Header.Add("Authorization", "Bearer "+token)
 		req.Header.Add("Accept", "application/vnd.github.v3.raw")
 		resp, err := client.Do(req)
 		if err != nil {
@@ -263,8 +256,6 @@ func performBeforeAfterChecks(webhook *Webhook, checkId int, checkRunURL *string
 
 	return &errors
 }
-
-
 
 func setAdhocError(webhook *Webhook, checkId int, checkRunURL *string, message string) {
 
