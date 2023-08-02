@@ -11,7 +11,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/galasa.dev/githubapp-copyright/pkg/checks"
+	"github.com/galasa-dev/githubapp-copyright/pkg/checks"
 )
 
 func main() {
