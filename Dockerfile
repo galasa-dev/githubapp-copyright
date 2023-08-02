@@ -1,8 +1,9 @@
 #
-# Licensed Materials - Property of IBM
-# 
-# (c) Copyright IBM Corp. 2021.
+# Copyright contributors to the Galasa project
 #
+# SPDX-License-Identifier: EPL-2.0
+#
+
 ARG dockerRepository
 FROM ${dockerRepository}/library/alpine:3.14
 

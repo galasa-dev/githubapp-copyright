@@ -1,16 +1,61 @@
 #
-# Licensed Materials - Property of IBM
+# Copyright contributors to the Galasa project
 #
-# (c) Copyright IBM Corp. 2021.
+# SPDX-License-Identifier: EPL-2.0
 #
 
-all: bin/copyright bin/copyright-amd64
 
-bin/copyright : ./*.go
+all: tests bin/copyright bin/copyright-amd64
+
+source-code : ./*.go
+
+bin/copyright : source-code
 	CGO_ENABLED=0 go build -o bin/copyright .
 
-bin/copyright-amd64 : ./*.go
+bin/copyright-amd64 : source-code
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/copyright-amd64 .
 
+tests: build/coverage.txt build/coverage.html
+
+build/coverage.out : source-code
+	mkdir -p build
+	go test -v -cover -coverprofile=build/coverage.out -coverpkg . ./...
+
+build/coverage.html : build/coverage.out
+	go tool cover -html=build/coverage.out -o build/coverage.html
+
+build/coverage.txt : build/coverage.out
+	go tool cover -func=build/coverage.out > build/coverage.txt
+	cat build/coverage.txt
+
 clean:
-	rm -rf bin
+	rm -fr bin/*
+	rm -fr build/*
+
+
+# all: tests galasacopyrighter
+
+# galasacopyrighter: bin/galasacopyrighter-darwin-arm64 
+
+# galasacopyrighter-source : \
+# 	./cmd/galasacopyrighter/*.go \
+# 	./pkg/cmd/*.go \
+# 	./pkg/files/*.go
+
+# tests: galasacopyrighter-source build/coverage.txt build/coverage.html
+
+# bin/galasacopyrighter-darwin-arm64 : galasacopyrighter-source
+# 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o bin/galasacopyrighter-darwin-arm64 ./cmd/galasacopyrighter	
+
+# build/coverage.out : galasacopyrighter-source
+# 	mkdir -p build
+# 	go test -v -cover -coverprofile=build/coverage.out -coverpkg ./pkg/cmd ./pkg/...
+
+# build/coverage.html : build/coverage.out
+# 	go tool cover -html=build/coverage.out -o build/coverage.html
+
+# build/coverage.txt : build/coverage.out
+# 	go tool cover -func=build/coverage.out > build/coverage.txt
+# 	cat build/coverage.txt
+
+
