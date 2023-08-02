@@ -1,4 +1,4 @@
-module galasa.dev/githubapp-copyright
+module galasa-dev/githubapp-copyright
 
 go 1.16
 
