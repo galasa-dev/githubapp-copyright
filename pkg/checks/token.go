@@ -33,7 +33,7 @@ type githubToken struct {
 }
 
 func init() {
-	keyBytes, err := os.ReadFile("../../key.pem")
+	keyBytes, err := os.ReadFile("key.pem")
 	if err != nil {
 		panic(err)
 	}

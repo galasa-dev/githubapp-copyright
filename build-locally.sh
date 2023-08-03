@@ -122,13 +122,30 @@ function install_openssl {
 #--------------------------------------------------------------------------
 function generate_rsa_key_in_pem_file {
     h2 "Generating the RSA key within a key.pem file..."
+
+    mkdir -p ${BASEDIR}/build
+    pushd ${BASEDIR}/build
+
     openssl genrsa -out rsa.private 1024
     rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to generate an RSA key. rc=${rc}" ; exit 1 ; fi
 
-    openssl rsa -in rsa.private -out key.pem
+    openssl rsa -in rsa.private -out key.pem 
     rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to convert the rsa private key into pem format. rc=${rc}" ; exit 1 ; fi
 
+    popd
+
     success "OK"
+}
+
+function clean {
+    h2 "Cleaning the binaries out..."
+    if [[ "${build_type}" != "clean" ]]; then
+        success "No need to clean up."
+    else
+        make clean
+        rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to build binary executable copyright checker programs. rc=${rc}" ; exit 1 ; fi
+        success "Binaries cleaned up - OK"
+    fi
 }
 
 #--------------------------------------------------------------------------
@@ -137,12 +154,6 @@ function generate_rsa_key_in_pem_file {
 #
 #--------------------------------------------------------------------------
 function build_executables {
-    if [[ "${build_type}" == "clean" ]]; then
-        h2 "Cleaning the binaries out..."
-        make clean
-        rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to build binary executable copyright checker programs. rc=${rc}" ; exit 1 ; fi
-        success "Binaries cleaned up - OK"
-    fi
 
     h2 "Building new binaries..."
     set -o pipefail # Fail everything if anything in the pipeline fails. Else we are just checking the 'tee' return code.
@@ -156,6 +167,7 @@ function build_executables {
 h1 "Building the copyright checker tool"
 
 install_openssl
+clean
 generate_rsa_key_in_pem_file
 build_executables
 

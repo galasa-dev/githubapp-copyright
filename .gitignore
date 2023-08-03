@@ -3,4 +3,4 @@
 **/.DS_Store
 
 rsa.*
-key.pem
+**/*.pem
