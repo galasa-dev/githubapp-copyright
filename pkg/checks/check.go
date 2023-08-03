@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
@@ -32,9 +32,15 @@ type CheckError struct {
 }
 
 func init() {
-	javaCommentBlockPattern = regexp.MustCompile("(?s)/\\*(.*?)\\*/")
+	javaCommentBlockPattern = regexp.MustCompile(`\s*\/[*]((.|\s)*)[*]\/`)
 
-	copyrightPattern = regexp.MustCompile("\\QCopyright contributors to the Galasa project\\E")
+	// \s means any whitespace character (including \n new lines)
+	// [*] means a splat/star/asterisk character.
+	// We are trying to all this:
+	// A copyright message "Copyright contributors to the Galasa project" followed by
+	// any number of lines with leading and trailing whitespace around an asterisk, followed by
+	// a line containing <optional-whitespace>SPDX-License-Identifier:<optional-whitespace>EPL-2.0
+	copyrightPattern = regexp.MustCompile(`Copyright contributors to the Galasa project(\s*[*]\s*)*\s*[*]\s*SPDX-License-Identifier:\s*EPL-2[.]0`)
 }
 
 func checkPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) (*[]CheckError, error) {
@@ -66,7 +72,7 @@ func checkPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) (*[]
 			break
 		}
 
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
 		}
@@ -152,6 +158,7 @@ func checkJavaFileContent(content string, fileName string) *CheckError {
 	var checkError *CheckError = nil
 
 	commentBlockLocation := javaCommentBlockPattern.FindStringIndex(content)
+
 	if commentBlockLocation == nil {
 		checkError = &CheckError{
 			Path:     fileName,
@@ -161,9 +168,9 @@ func checkJavaFileContent(content string, fileName string) *CheckError {
 	} else {
 		commentBlock := content[commentBlockLocation[0]:commentBlockLocation[1]]
 
-		checkError := checkCommentBlock(&commentBlock, fileName)
-		if checkError == nil {
+		checkError = checkCommentBlock(&commentBlock, fileName)
 
+		if checkError == nil {
 			// last check,  the first comment block should be at the top
 			if commentBlockLocation[0] != 0 {
 				checkError = &CheckError{
@@ -212,13 +219,13 @@ func checkYamlFile(webhook *Webhook, checkId int, token *string, client *http.Cl
 }
 
 func checkCommentBlock(commentBlock *string, fileName string) *CheckError {
+	var checkError *CheckError = nil
 
 	// Check to see if it has the copyright text
-
 	copyrights := copyrightPattern.FindAllStringSubmatchIndex(*commentBlock, -1)
 
 	if len(copyrights) <= 0 {
-		return &CheckError{
+		checkError = &CheckError{
 			Path:     fileName,
 			Message:  "Did not find copyright text in first comment block",
 			Location: 0,
@@ -226,15 +233,14 @@ func checkCommentBlock(commentBlock *string, fileName string) *CheckError {
 	}
 
 	if len(copyrights) > 1 {
-		return &CheckError{
+		checkError = &CheckError{
 			Path:     fileName,
 			Message:  "Found too many copyright texts in first comment block",
 			Location: 0,
 		}
 	}
 
-	// All is ok
-	return nil
+	return checkError
 }
 
 func getFileContent(token *string, client *http.Client, contentURL *string) (string, *error) {
@@ -254,7 +260,7 @@ func getFileContent(token *string, client *http.Client, contentURL *string) (str
 		return "", &newError
 	}
 
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", &err
 	}
@@ -297,7 +303,7 @@ func createCheckRun(webhook *Webhook, headSha *string) *string {
 	}
 	defer resp.Body.Close()
 
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		panic(err) // TODO
 	}
@@ -375,7 +381,7 @@ func updateCheckRun(webhook *Webhook, checkRunURL *string, errors *[]CheckError,
 	}
 	defer resp.Body.Close()
 
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatalf("Fatal error - %v", err)
 		return

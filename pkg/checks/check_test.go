@@ -31,15 +31,30 @@ func TestCheckJavaContentFindsCopyrightOk(t *testing.T) {
 func TestCheckJavaContentFindsCopyrightMissing(t *testing.T) {
 	// Given
 	var content = `/*
- * 
+ *
  *
  */
 `
 	var fileName = "test.java"
-
 	// When..
 	checkError := checkJavaFileContent(content, fileName)
 
 	// Then...
-	assert.Nil(t, checkError)
+	assert.NotNil(t, checkError)
+	assert.Contains(t, checkError.Message, "Did not find copyright text in first comment block")
+}
+
+func TestCheckJavaContentFindsLicenseMissing(t *testing.T) {
+	// Given
+	var content = `/*
+ * Copyright contributors to the Galasa project
+ */
+`
+	var fileName = "test.java"
+	// When..
+	checkError := checkJavaFileContent(content, fileName)
+
+	// Then...
+	assert.NotNil(t, checkError)
+	assert.Contains(t, checkError.Message, "Did not find copyright text in first comment block")
 }
