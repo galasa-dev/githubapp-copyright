@@ -1,3 +1,8 @@
+/*
+ * Copyright contributors to the Galasa project
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
 package checks
 
 import (
@@ -17,8 +22,10 @@ var (
 	javaCommentBlockPattern *regexp.Regexp
 
 	//licencePattern   *regexp.Regexp
-	javaCopyrightPattern *regexp.Regexp
-	hashCopyrightPattern *regexp.Regexp
+	javaCopyrightPattern         *regexp.Regexp
+	hashCopyrightPattern         *regexp.Regexp
+	javaExpectedCopyrightMessage string
+	hashExpectedCopyrightMessage string
 )
 
 type CheckError struct {
@@ -38,6 +45,9 @@ func init() {
 	// a line containing <optional-whitespace>SPDX-License-Identifier:<optional-whitespace>EPL-2.0
 	javaCopyrightPattern = regexp.MustCompile(`Copyright contributors to the Galasa project(\s*[*]\s*)*\s*[*]\s*SPDX-License-Identifier:\s*EPL-2[.]0`)
 	hashCopyrightPattern = regexp.MustCompile(`Copyright contributors to the Galasa project(\s*[#]\s*)*\s*[#]\s*SPDX-License-Identifier:\s*EPL-2[.]0`)
+
+	javaExpectedCopyrightMessage = "\nExpected to see:\n/*\n * Copyright contributors to the Galasa project\n *\n * SPDX-License-Identifier: EPL-2.0\n */"
+	hashExpectedCopyrightMessage = "\nExpected to see:\n#\n# Copyright contributors to the Galasa project\n#\n# SPDX-License-Identifier: EPL-2.0\n#"
 }
 
 func checkPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) (*[]CheckError, error) {
@@ -157,6 +167,7 @@ func checkJavaFile(webhook *Webhook, checkId int, token *string, client *http.Cl
 	} else {
 		checkError = checkJavaFileContent(content, file.Filename)
 	}
+
 	return checkError
 }
 
@@ -170,7 +181,7 @@ func checkJavaFileContent(content string, fileName string) *CheckError {
 	if commentBlockLocation == nil {
 		checkError = &CheckError{
 			Path:     fileName,
-			Message:  "Did not find comment block",
+			Message:  "Did not find comment block." + javaExpectedCopyrightMessage,
 			Location: 0,
 		}
 	} else {
@@ -183,7 +194,7 @@ func checkJavaFileContent(content string, fileName string) *CheckError {
 			if commentBlockLocation[0] != 0 {
 				checkError = &CheckError{
 					Path:     fileName,
-					Message:  "Comment block containing copyright should be at the top",
+					Message:  "Comment block containing copyright should be at the top of the file." + javaExpectedCopyrightMessage,
 					Location: commentBlockLocation[0],
 				}
 			}
@@ -208,6 +219,7 @@ func checkYamlFile(webhook *Webhook, checkId int, token *string, client *http.Cl
 	} else {
 		checkError = checkYamlFileContent(content, file.Filename)
 	}
+
 	return checkError
 }
 
@@ -239,7 +251,7 @@ func checkYamlFileContent(content string, fileName string) *CheckError {
 	if commentBlock == "" {
 		checkError = &CheckError{
 			Path:     fileName,
-			Message:  "A comment block is missing at the start of the file",
+			Message:  "A comment block is missing at the start of the file." + hashExpectedCopyrightMessage,
 			Location: 0,
 		}
 	} else {
@@ -252,18 +264,21 @@ func checkYamlFileContent(content string, fileName string) *CheckError {
 func checkCommentBlock(commentBlock *string, fileName string, fileType string) *CheckError {
 	var checkError *CheckError = nil
 	var copyrights [][]int
+	var expectedCopyrightMessage string
 
 	// Check to see if it has the copyright text
 	if fileType == "java" {
 		copyrights = javaCopyrightPattern.FindAllStringSubmatchIndex(*commentBlock, -1)
+		expectedCopyrightMessage = javaExpectedCopyrightMessage
 	} else if fileType == "yaml" {
 		copyrights = hashCopyrightPattern.FindAllStringSubmatchIndex(*commentBlock, -1)
+		expectedCopyrightMessage = hashExpectedCopyrightMessage
 	}
 
 	if len(copyrights) <= 0 {
 		checkError = &CheckError{
 			Path:     fileName,
-			Message:  "Did not find copyright text in first comment block",
+			Message:  "Did not find copyright text in first comment block." + expectedCopyrightMessage,
 			Location: 0,
 		}
 	}
@@ -271,7 +286,7 @@ func checkCommentBlock(commentBlock *string, fileName string, fileType string) *
 	if len(copyrights) > 1 {
 		checkError = &CheckError{
 			Path:     fileName,
-			Message:  "Found too many copyright texts in first comment block",
+			Message:  "Found too many copyright texts in first comment block" + expectedCopyrightMessage,
 			Location: 0,
 		}
 	}

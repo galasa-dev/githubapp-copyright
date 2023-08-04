@@ -90,7 +90,7 @@ func TestCheckJavaContentFindsCopyrightOkAndHasLeadingText(t *testing.T) {
 
 	// Then...
 	assert.NotNil(t, checkError)
-	assert.Contains(t, checkError.Message, "Comment block containing copyright should be at the top")
+	assert.Contains(t, checkError.Message, "Comment block containing copyright should be at the top of the file")
 }
 
 func TestCheckJavaContentFindsLicenseMissingAndHasLeadingText(t *testing.T) {
