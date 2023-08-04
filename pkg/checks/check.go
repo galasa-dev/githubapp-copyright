@@ -21,8 +21,9 @@ import (
 var (
 	javaCommentBlockPattern *regexp.Regexp
 
-	licencePattern   *regexp.Regexp
-	copyrightPattern *regexp.Regexp
+	//licencePattern   *regexp.Regexp
+	javaCopyrightPattern *regexp.Regexp
+	hashCopyrightPattern *regexp.Regexp
 )
 
 type CheckError struct {
@@ -40,7 +41,8 @@ func init() {
 	// A copyright message "Copyright contributors to the Galasa project" followed by
 	// any number of lines with leading and trailing whitespace around an asterisk, followed by
 	// a line containing <optional-whitespace>SPDX-License-Identifier:<optional-whitespace>EPL-2.0
-	copyrightPattern = regexp.MustCompile(`Copyright contributors to the Galasa project(\s*[*]\s*)*\s*[*]\s*SPDX-License-Identifier:\s*EPL-2[.]0`)
+	javaCopyrightPattern = regexp.MustCompile(`Copyright contributors to the Galasa project(\s*[*]\s*)*\s*[*]\s*SPDX-License-Identifier:\s*EPL-2[.]0`)
+	hashCopyrightPattern = regexp.MustCompile(`Copyright contributors to the Galasa project(\s*[#]\s*)*\s*[#]\s*SPDX-License-Identifier:\s*EPL-2[.]0`)
 }
 
 func checkPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) (*[]CheckError, error) {
@@ -123,12 +125,22 @@ func checkFile(webhook *Webhook, checkId int, token *string, client *http.Client
 	}
 
 	// Check for Typescript files, same as Java
-	if strings.HasSuffix(file.Filename, ".ts") {
+	if strings.HasSuffix(file.Filename, ".ts") || strings.HasSuffix(file.Filename, ".tsx") {
+		return checkJavaFile(webhook, checkId, token, client, file)
+	}
+
+	// Check for JavaScript files, same as Java
+	if strings.HasSuffix(file.Filename, ".js") {
 		return checkJavaFile(webhook, checkId, token, client, file)
 	}
 
 	// Check for Yaml files
 	if strings.HasSuffix(file.Filename, ".yaml") {
+		return checkYamlFile(webhook, checkId, token, client, file)
+	}
+
+	// Check for Bash Script files, same as Yaml
+	if strings.HasSuffix(file.Filename, ".sh") {
 		return checkYamlFile(webhook, checkId, token, client, file)
 	}
 
@@ -156,6 +168,7 @@ func checkJavaFile(webhook *Webhook, checkId int, token *string, client *http.Cl
 func checkJavaFileContent(content string, fileName string) *CheckError {
 
 	var checkError *CheckError = nil
+	var fileType = "java"
 
 	commentBlockLocation := javaCommentBlockPattern.FindStringIndex(content)
 
@@ -168,7 +181,7 @@ func checkJavaFileContent(content string, fileName string) *CheckError {
 	} else {
 		commentBlock := content[commentBlockLocation[0]:commentBlockLocation[1]]
 
-		checkError = checkCommentBlock(&commentBlock, fileName)
+		checkError = checkCommentBlock(&commentBlock, fileName, fileType)
 
 		if checkError == nil {
 			// last check,  the first comment block should be at the top
@@ -187,6 +200,8 @@ func checkJavaFileContent(content string, fileName string) *CheckError {
 
 func checkYamlFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) *CheckError {
 	log.Printf("(%v) Checking file %v - %v\n", checkId, file.Filename, file.Sha)
+
+	var checkError *CheckError = nil
 	content, err := getFileContent(token, client, &file.ContentsURL)
 	if err != nil {
 		fatalMessage := fmt.Sprintf("Failed to access the content of the file for checking - %v", err)
@@ -195,9 +210,28 @@ func checkYamlFile(webhook *Webhook, checkId int, token *string, client *http.Cl
 			Message:  fatalMessage,
 			Location: 0,
 		}
+	} else {
+		checkError = checkYamlFileContent(content, file.Filename)
 	}
+	return checkError
+}
+
+func checkYamlFileContent(content string, fileName string) *CheckError {
+	var checkError *CheckError = nil
+	var fileType = "yaml"
+
 	commentBlock := ""
+
+	//if it is a bash script (.sh)
+	//ignore the first line that starts with !#
+	//and any subsequent whitespace
+	if strings.HasSuffix(fileName, ".sh") {
+		nextLine := strings.Index(content, "\n")
+		content = strings.TrimSpace(content[nextLine:])
+	}
+
 	scanner := bufio.NewScanner(strings.NewReader(content))
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "#") {
@@ -208,21 +242,28 @@ func checkYamlFile(webhook *Webhook, checkId int, token *string, client *http.Cl
 
 	// check we have a comment block at the begining of the file
 	if commentBlock == "" {
-		return &CheckError{
-			Path:     file.Filename,
+		checkError = &CheckError{
+			Path:     fileName,
 			Message:  "A comment block is missing at the start of the file",
 			Location: 0,
 		}
+	} else {
+		checkError = checkCommentBlock(&commentBlock, fileName, fileType)
 	}
 
-	return checkCommentBlock(&commentBlock, file.Filename)
+	return checkError
 }
 
-func checkCommentBlock(commentBlock *string, fileName string) *CheckError {
+func checkCommentBlock(commentBlock *string, fileName string, fileType string) *CheckError {
 	var checkError *CheckError = nil
+	var copyrights [][]int
 
 	// Check to see if it has the copyright text
-	copyrights := copyrightPattern.FindAllStringSubmatchIndex(*commentBlock, -1)
+	if fileType == "java" {
+		copyrights = javaCopyrightPattern.FindAllStringSubmatchIndex(*commentBlock, -1)
+	} else if fileType == "yaml" {
+		copyrights = hashCopyrightPattern.FindAllStringSubmatchIndex(*commentBlock, -1)
+	}
 
 	if len(copyrights) <= 0 {
 		checkError = &CheckError{
