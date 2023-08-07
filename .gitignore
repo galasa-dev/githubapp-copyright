@@ -1,2 +1,6 @@
-bin
-.DS_Store
+**/bin
+**/build
+**/.DS_Store
+
+rsa.*
+**/*.pem
