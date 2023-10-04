@@ -17,3 +17,5 @@ RUN chmod +x /bin/copyright
 
 WORKDIR /galasa
 USER galasa
+
+CMD ["/bin/copyright"]
