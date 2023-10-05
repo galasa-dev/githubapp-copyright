@@ -6,10 +6,12 @@
 package checks
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -33,7 +35,16 @@ type githubToken struct {
 }
 
 func init() {
-	keyBytes, err := os.ReadFile("key.pem")
+
+	// We accept an optional evironment GITHUB_AUTH_KEY
+	keyFilePath := os.Getenv("GITHUB_AUTH_KEY")
+	if keyFilePath == "" {
+		keyFilePath = "key.pem"
+	}
+
+	log.Printf("Using key file %s", keyFilePath)
+
+	keyBytes, err := os.ReadFile(keyFilePath)
 	if err != nil {
 		panic(err)
 	}
@@ -95,10 +106,12 @@ func getToken(installation int) string {
 		panic(resp.Status) // TODO
 	}
 
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, resp.Body)
 	if err != nil {
 		panic(err) // TODO
 	}
+	var bodyBytes = buf.Bytes()
 
 	var tokenResponse InstallationToken
 	err = json.Unmarshal(bodyBytes, &tokenResponse)

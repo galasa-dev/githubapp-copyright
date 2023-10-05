@@ -158,6 +158,7 @@ function build_executables {
     h2 "Building new binaries..."
     set -o pipefail # Fail everything if anything in the pipeline fails. Else we are just checking the 'tee' return code.
     mkdir -p ${BASEDIR}/build
+    export GITHUB_AUTH_KEY=${BASEDIR}/build/key.pem
     make all | tee ${BASEDIR}/build/compile-log.txt
     rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to build binary executable copyright checker programs. rc=${rc}. See log at ${BASEDIR}/build/compile-log.txt" ; exit 1 ; fi
     success "New binaries built - OK"
