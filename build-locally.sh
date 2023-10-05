@@ -163,6 +163,17 @@ function build_executables {
     success "New binaries built - OK"
 }
 
+function build_container_image {
+    h2 "Building container image..."
+
+    cmd="docker build -t githubapp-copyright:latest -f Dockerfile --build-arg=dockerRepository=docker.io  ."
+    info "Command is $cmd"
+    $cmd
+    rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to build container image. rc=${rc}. See log at ${BASEDIR}/build/compile-log.txt" ; exit 1 ; fi
+
+    success "Built container image OK."
+}
+
 #--------------------------------------------------------------------------
 h1 "Building the copyright checker tool"
 
@@ -170,5 +181,6 @@ install_openssl
 clean
 generate_rsa_key_in_pem_file
 build_executables
+build_container_image
 
 success "OK"
