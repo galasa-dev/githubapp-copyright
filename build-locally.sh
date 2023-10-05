@@ -166,7 +166,9 @@ function build_executables {
 function build_container_image {
     h2 "Building container image..."
 
-    docker build -t githubapp-copyright -f Dockerfile --build-arg=dockerRepository=docker.io  .
+    cmd="docker build -t githubapp-copyright:latest -f Dockerfile --build-arg=dockerRepository=docker.io  ."
+    info "Command is $cmd"
+    $cmd
     rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to build container image. rc=${rc}. See log at ${BASEDIR}/build/compile-log.txt" ; exit 1 ; fi
 
     success "Built container image OK."
