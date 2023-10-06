@@ -13,6 +13,8 @@ import (
 
 func TestCheckJavaContentFindsCopyrightOk(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `/*
  * Copyright contributors to the Galasa project
  *
@@ -22,7 +24,7 @@ func TestCheckJavaContentFindsCopyrightOk(t *testing.T) {
 	var fileName = "test.java"
 
 	// When..
-	checkError := checkJavaFileContent(content, fileName)
+	checkError := checker.checkJavaFileContent(content, fileName)
 
 	// Then...
 	assert.Nil(t, checkError)
@@ -30,6 +32,8 @@ func TestCheckJavaContentFindsCopyrightOk(t *testing.T) {
 
 func TestCheckJavaContentFindsCopyrightMissing(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `/*
  *
  *
@@ -37,7 +41,7 @@ func TestCheckJavaContentFindsCopyrightMissing(t *testing.T) {
 `
 	var fileName = "test.java"
 	// When..
-	checkError := checkJavaFileContent(content, fileName)
+	checkError := checker.checkJavaFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -46,11 +50,13 @@ func TestCheckJavaContentFindsCopyrightMissing(t *testing.T) {
 
 func TestCheckJavaContentFindsNoComment(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `Hello, world!
 `
 	var fileName = "test.java"
 	// When..
-	checkError := checkJavaFileContent(content, fileName)
+	checkError := checker.checkJavaFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -65,7 +71,9 @@ func TestCheckJavaContentFindsLicenseMissing(t *testing.T) {
 `
 	var fileName = "test.java"
 	// When..
-	checkError := checkJavaFileContent(content, fileName)
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
+	checkError := checker.checkJavaFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -75,6 +83,8 @@ func TestCheckJavaContentFindsLicenseMissing(t *testing.T) {
 // should copyright comments only be at the top?
 func TestCheckJavaContentFindsCopyrightOkAndHasLeadingText(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `leading text here
 	and more leading text
 /*
@@ -86,7 +96,7 @@ func TestCheckJavaContentFindsCopyrightOkAndHasLeadingText(t *testing.T) {
 	var fileName = "test.java"
 
 	// When..
-	checkError := checkJavaFileContent(content, fileName)
+	checkError := checker.checkJavaFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -95,6 +105,8 @@ func TestCheckJavaContentFindsCopyrightOkAndHasLeadingText(t *testing.T) {
 
 func TestCheckJavaContentFindsLicenseMissingAndHasLeadingText(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `leading text here
 and more leading text
 /*
@@ -103,7 +115,7 @@ and more leading text
 `
 	var fileName = "test.java"
 	// When..
-	checkError := checkJavaFileContent(content, fileName)
+	checkError := checker.checkJavaFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -112,6 +124,8 @@ and more leading text
 
 func TestCheckJavaContentFindsTooManyCopyright(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `/*
  * Copyright contributors to the Galasa project
  *
@@ -125,7 +139,7 @@ func TestCheckJavaContentFindsTooManyCopyright(t *testing.T) {
 	var fileName = "test.java"
 
 	// When..
-	checkError := checkJavaFileContent(content, fileName)
+	checkError := checker.checkJavaFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -134,6 +148,8 @@ func TestCheckJavaContentFindsTooManyCopyright(t *testing.T) {
 
 func TestCheckJavaContentFindsCopyrightCommentJoinedWithAnotherComment(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `/*
  * Copyright contributors to the Galasa project
  *
@@ -145,7 +161,7 @@ func TestCheckJavaContentFindsCopyrightCommentJoinedWithAnotherComment(t *testin
 	var fileName = "test.java"
 
 	// When..
-	checkError := checkJavaFileContent(content, fileName)
+	checkError := checker.checkJavaFileContent(content, fileName)
 
 	// Then...
 	assert.Nil(t, checkError)
@@ -153,6 +169,8 @@ func TestCheckJavaContentFindsCopyrightCommentJoinedWithAnotherComment(t *testin
 
 func TestCheckJavaContentFindsCopyrightOkWhenOtherCommentsArePresent(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `/*
  * Copyright contributors to the Galasa project
  *
@@ -166,7 +184,7 @@ func TestCheckJavaContentFindsCopyrightOkWhenOtherCommentsArePresent(t *testing.
 	var fileName = "test.java"
 
 	// When..
-	checkError := checkJavaFileContent(content, fileName)
+	checkError := checker.checkJavaFileContent(content, fileName)
 
 	// Then...
 	assert.Nil(t, checkError)
@@ -174,6 +192,8 @@ func TestCheckJavaContentFindsCopyrightOkWhenOtherCommentsArePresent(t *testing.
 
 func TestCheckYamlContentFindsCopyrightOk(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `#
 # Copyright contributors to the Galasa project
 #
@@ -183,7 +203,7 @@ func TestCheckYamlContentFindsCopyrightOk(t *testing.T) {
 	var fileName = "test.yaml"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.Nil(t, checkError)
@@ -191,12 +211,15 @@ func TestCheckYamlContentFindsCopyrightOk(t *testing.T) {
 
 func TestCheckYamlContentFindsNoComment(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
+
 	var content = `Hello, World!
 `
 	var fileName = "test.yaml"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -204,13 +227,16 @@ func TestCheckYamlContentFindsNoComment(t *testing.T) {
 }
 
 func TestCheckYamlContentFindsCopyrightMissing(t *testing.T) {
+
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `# Hello, world!
 `
 	var fileName = "test.yaml"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -219,6 +245,8 @@ func TestCheckYamlContentFindsCopyrightMissing(t *testing.T) {
 
 func TestCheckYamlContentFindsLicenseMissing(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `#
 # Copyright contributors to the Galasa project
 #
@@ -226,7 +254,7 @@ func TestCheckYamlContentFindsLicenseMissing(t *testing.T) {
 	var fileName = "test.yaml"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -236,6 +264,8 @@ func TestCheckYamlContentFindsLicenseMissing(t *testing.T) {
 // should copyright comments only be at the top?
 func TestCheckYamlContentFindsCopyrightOkWithLeadingText(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `leading text
 and more leading text
 
@@ -248,7 +278,7 @@ and more leading text
 	var fileName = "test.yaml"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -257,6 +287,8 @@ and more leading text
 
 func TestCheckYamlContentFindsTooManyCopyright(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `#
 # Copyright contributors to the Galasa project
 #
@@ -270,7 +302,7 @@ func TestCheckYamlContentFindsTooManyCopyright(t *testing.T) {
 	var fileName = "test.yaml"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -279,6 +311,8 @@ func TestCheckYamlContentFindsTooManyCopyright(t *testing.T) {
 
 func TestCheckYamlContentFindsCopyrightCommentJoinedWithAnotherComment(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `#
 # Copyright contributors to the Galasa project
 #
@@ -290,7 +324,7 @@ func TestCheckYamlContentFindsCopyrightCommentJoinedWithAnotherComment(t *testin
 	var fileName = "test.yaml"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.Nil(t, checkError)
@@ -298,6 +332,8 @@ func TestCheckYamlContentFindsCopyrightCommentJoinedWithAnotherComment(t *testin
 
 func TestCheckYamlContentFindsCopyrightOkWhenOtherCommentsArePresent(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `#
 # Copyright contributors to the Galasa project
 #
@@ -311,7 +347,7 @@ func TestCheckYamlContentFindsCopyrightOkWhenOtherCommentsArePresent(t *testing.
 	var fileName = "test.yaml"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.Nil(t, checkError)
@@ -319,6 +355,8 @@ func TestCheckYamlContentFindsCopyrightOkWhenOtherCommentsArePresent(t *testing.
 
 func TestCheckYamlContentFindsCopyrightWithNoLeadingOrEndingHashes(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `# Copyright contributors to the Galasa project
 #
 # SPDX-License-Identifier: EPL-2.0
@@ -328,7 +366,7 @@ func TestCheckYamlContentFindsCopyrightWithNoLeadingOrEndingHashes(t *testing.T)
 	var fileName = "test.yaml"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.Nil(t, checkError)
@@ -336,6 +374,8 @@ func TestCheckYamlContentFindsCopyrightWithNoLeadingOrEndingHashes(t *testing.T)
 
 func TestCheckBashContentCopyrightOk(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `#! bin/bash
 
 #
@@ -347,7 +387,7 @@ func TestCheckBashContentCopyrightOk(t *testing.T) {
 	var fileName = "test.sh"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.Nil(t, checkError)
@@ -355,6 +395,8 @@ func TestCheckBashContentCopyrightOk(t *testing.T) {
 
 func TestCheckBashContentFindsCopyrightMissing(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `#! bin
 #
 # SPDX-License-Identifier: EPL-2.0
@@ -363,7 +405,7 @@ func TestCheckBashContentFindsCopyrightMissing(t *testing.T) {
 	var fileName = "test.sh"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -373,6 +415,8 @@ func TestCheckBashContentFindsCopyrightMissing(t *testing.T) {
 // should copyright comments only be at the top?
 func TestCheckBashContentWithLeadingCommentOrText(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `#! bin/bin
 leading text
 and more leading text
@@ -386,7 +430,7 @@ and more leading text
 	var fileName = "test.sh"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -395,13 +439,15 @@ and more leading text
 
 func TestCheckBashContentFindsNoComment(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `#! bin
 Hello, World!
 `
 	var fileName = "test.sh"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -410,6 +456,8 @@ Hello, World!
 
 func TestCheckBashContentFindsTooManyCopyright(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `#! bin
 #
 # Copyright contributors to the Galasa project
@@ -424,7 +472,7 @@ func TestCheckBashContentFindsTooManyCopyright(t *testing.T) {
 	var fileName = "test.sh"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.NotNil(t, checkError)
@@ -433,6 +481,8 @@ func TestCheckBashContentFindsTooManyCopyright(t *testing.T) {
 
 func TestCheckBashContentFindsCopyrightOkWhenOtherCommentsArePresent(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `#! bin
 #
 # Copyright contributors to the Galasa project
@@ -447,7 +497,7 @@ func TestCheckBashContentFindsCopyrightOkWhenOtherCommentsArePresent(t *testing.
 	var fileName = "test.sh"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.Nil(t, checkError)
@@ -455,6 +505,8 @@ func TestCheckBashContentFindsCopyrightOkWhenOtherCommentsArePresent(t *testing.
 
 func TestBashYamlContentFindsCopyrightWithNoLeadingOrEndingHashes(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `#! bash
 # Copyright contributors to the Galasa project
 #
@@ -465,7 +517,7 @@ func TestBashYamlContentFindsCopyrightWithNoLeadingOrEndingHashes(t *testing.T) 
 	var fileName = "test.sh"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.Nil(t, checkError)
@@ -473,6 +525,8 @@ func TestBashYamlContentFindsCopyrightWithNoLeadingOrEndingHashes(t *testing.T) 
 
 func TestCheckBashContentFindsCopyrightCommentJoinedWithAnotherComment(t *testing.T) {
 	// Given
+	tokenSupplier, _ := NewTokenSupplierMock()
+	checker, _ := NewChecker(tokenSupplier)
 	var content = `#! bin
 # Copyright contributors to the Galasa project
 #
@@ -484,7 +538,7 @@ func TestCheckBashContentFindsCopyrightCommentJoinedWithAnotherComment(t *testin
 	var fileName = "test.sh"
 
 	// When..
-	checkError := checkYamlFileContent(content, fileName)
+	checkError := checker.checkYamlFileContent(content, fileName)
 
 	// Then...
 	assert.Nil(t, checkError)

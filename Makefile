@@ -18,22 +18,7 @@ bin/copyright-amd64 : source-code
 tests: build/coverage.txt build/coverage.html
 
 build/coverage.out : source-code
-	mkdir -p build
-	# Compile the tests into a binary executable "checks.test"
-	go test -c -v -cover  -coverpkg ./pkg/checks ./pkg/...
-	# Keep it tidy by moving it out the way so it never gets checked-in.
-	mv checks.test build
-	# Each line in the makefile executes with a different environment.
-	# So cd'ing to a folder has no effect unless you do something immediately on the
-	# same line... or conjoined line with the make '\' character.
-	#
-	# We pass the key.pem file for unit testing if we have it. 
-	# Local builds have placed a key.pem file in the build folder.
-	# Default the env variable value if it has not been set.
-	# 
-	if [[ "$GITHUB_AUTH_KEY" == "" ]]; then GITHUB_AUTH_KEY=key.pem ; fi ; \
-	cd build ; \
-	./checks.test -test.coverprofile coverage.out
+	go test -v -cover -coverprofile=build/coverage.out  -coverpkg ./pkg/checks ./pkg/...
 
 build/coverage.html : build/coverage.out
 	go tool cover -html=build/coverage.out -o build/coverage.html

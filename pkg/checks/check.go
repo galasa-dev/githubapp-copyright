@@ -18,7 +18,24 @@ import (
 	"strings"
 )
 
-var (
+type CheckError struct {
+	Path     string
+	Message  string
+	Location int
+}
+
+type Checker interface {
+	CheckPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) (*[]CheckError, error)
+
+	CheckFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) (*CheckError, error)
+
+	UpdateCheckRun(webhook *Webhook, checkRunURL *string, errors *[]CheckError, fatalError *string) error
+	CreateCheckRun(webhook *Webhook, headSha *string) (*string, error)
+}
+
+type CheckerImpl struct {
+	tokenSupplier TokenSupplier
+
 	javaCommentBlockPattern *regexp.Regexp
 
 	//licencePattern   *regexp.Regexp
@@ -26,16 +43,17 @@ var (
 	hashCopyrightPattern         *regexp.Regexp
 	javaExpectedCopyrightMessage string
 	hashExpectedCopyrightMessage string
-)
-
-type CheckError struct {
-	Path     string
-	Message  string
-	Location int
 }
 
-func init() {
-	javaCommentBlockPattern = regexp.MustCompile(`\s*\/[*]((.|\s)*)[*]\/`)
+func NewChecker(tokenSupplier TokenSupplier) (*CheckerImpl, error) {
+
+	var err error = nil
+
+	checker := new(CheckerImpl)
+
+	checker.tokenSupplier = tokenSupplier
+
+	checker.javaCommentBlockPattern = regexp.MustCompile(`\s*\/[*]((.|\s)*)[*]\/`)
 
 	// \s means any whitespace character (including \n new lines)
 	// [*] means a splat/star/asterisk character.
@@ -43,120 +61,145 @@ func init() {
 	// A copyright message "Copyright contributors to the Galasa project" followed by
 	// any number of lines with leading and trailing whitespace around an asterisk, followed by
 	// a line containing <optional-whitespace>SPDX-License-Identifier:<optional-whitespace>EPL-2.0
-	javaCopyrightPattern = regexp.MustCompile(`Copyright contributors to the Galasa project(\s*[*]\s*)*\s*[*]\s*SPDX-License-Identifier:\s*EPL-2[.]0`)
-	hashCopyrightPattern = regexp.MustCompile(`Copyright contributors to the Galasa project(\s*[#]\s*)*\s*[#]\s*SPDX-License-Identifier:\s*EPL-2[.]0`)
+	checker.javaCopyrightPattern = regexp.MustCompile(`Copyright contributors to the Galasa project(\s*[*]\s*)*\s*[*]\s*SPDX-License-Identifier:\s*EPL-2[.]0`)
+	checker.hashCopyrightPattern = regexp.MustCompile(`Copyright contributors to the Galasa project(\s*[#]\s*)*\s*[#]\s*SPDX-License-Identifier:\s*EPL-2[.]0`)
 
-	javaExpectedCopyrightMessage = "\nExpected to see:\n/*\n * Copyright contributors to the Galasa project\n *\n * SPDX-License-Identifier: EPL-2.0\n */"
-	hashExpectedCopyrightMessage = "\nExpected to see:\n#\n# Copyright contributors to the Galasa project\n#\n# SPDX-License-Identifier: EPL-2.0\n#"
+	checker.javaExpectedCopyrightMessage = "\nExpected to see:\n/*\n * Copyright contributors to the Galasa project\n *\n * SPDX-License-Identifier: EPL-2.0\n */"
+	checker.hashExpectedCopyrightMessage = "\nExpected to see:\n#\n# Copyright contributors to the Galasa project\n#\n# SPDX-License-Identifier: EPL-2.0\n#"
+
+	return checker, err
 }
 
-func checkPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) (*[]CheckError, error) {
+func (checker *CheckerImpl) CheckPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) (*[]CheckError, error) {
 	log.Printf("(%v) Checking pullrequest '%v'", checkId, pullRequestUrl)
 
+	var err error = nil
 	installationId := webhook.Installation.Id
 
-	token := getToken(installationId)
+	checkErrors := make([]CheckError, 0)
 
-	client := &http.Client{}
+	var token string
+	token, err = checker.tokenSupplier.GetToken(installationId)
 
-	errors := make([]CheckError, 0)
-	// Retrieve list of files
-	for page := 1; ; page++ {
-		filesUrl := fmt.Sprintf("%v/files?page=%v", pullRequestUrl, page)
+	if err != nil {
 
-		req, err := http.NewRequest("GET", filesUrl, nil)
-		if err != nil {
-			return nil, err
+		client := &http.Client{}
+
+		// Retrieve list of files
+		for page := 1; ; page++ {
+			filesUrl := fmt.Sprintf("%v/files?page=%v", pullRequestUrl, page)
+
+			var req *http.Request
+			req, err = http.NewRequest("GET", filesUrl, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Add("Authorization", "Bearer "+token)
+			req.Header.Add("Accept", "application/vnd.github.v3+json")
+
+			var resp *http.Response
+			resp, err = client.Do(req)
+			if err != nil {
+				return nil, err
+			}
+
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				break
+			}
+
+			var bodyBytes []byte
+			bodyBytes, err = io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+
+			var files []File
+
+			err = json.Unmarshal(bodyBytes, &files)
+			if err != nil {
+				return nil, err
+			}
+
+			if files == nil || len(files) < 1 {
+				break
+			}
+
+			for _, file := range files {
+				var newError *CheckError
+				newError, err = checker.CheckFile(webhook, checkId, &token, client, &file)
+				if err == nil {
+					if newError != nil {
+						log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newError.Message)
+						checkErrors = append(checkErrors, *newError)
+					}
+				} else {
+					break
+				}
+			}
 		}
-		req.Header.Add("Authorization", "Bearer "+token)
-		req.Header.Add("Accept", "application/vnd.github.v3+json")
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
-			break
-		}
 
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-
-		var files []File
-
-		err = json.Unmarshal(bodyBytes, &files)
-		if err != nil {
-			return nil, err
-		}
-
-		if files == nil || len(files) < 1 {
-			break
-		}
-
-		for _, file := range files {
-			newError := checkFile(webhook, checkId, &token, client, &file)
-
-			if newError != nil {
-				log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newError.Message)
-				errors = append(errors, *newError)
+		if err == nil {
+			if len(checkErrors) < 1 {
+				return nil, nil
 			}
 		}
 	}
 
-	if len(errors) < 1 {
-		return nil, nil
-	}
-
-	return &errors, nil
+	return &checkErrors, err
 }
 
-func checkFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) *CheckError {
+func (checker *CheckerImpl) CheckFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) (*CheckError, error) {
+
+	var err error = nil
 
 	// we dont care about deleted files
 	if file.Status == "removed" {
-		return nil
+		return nil, err
 	}
 
 	// Check for Java files
 	if strings.HasSuffix(file.Filename, ".java") {
-		return checkJavaFile(webhook, checkId, token, client, file)
+		return checker.checkJavaFile(webhook, checkId, token, client, file)
 	}
 
 	// Check for Go files, same as java
 	if strings.HasSuffix(file.Filename, ".go") {
-		return checkJavaFile(webhook, checkId, token, client, file)
+		return checker.checkJavaFile(webhook, checkId, token, client, file)
 	}
 
 	// Check for Typescript files, same as Java
 	if strings.HasSuffix(file.Filename, ".ts") || strings.HasSuffix(file.Filename, ".tsx") {
-		return checkJavaFile(webhook, checkId, token, client, file)
+		return checker.checkJavaFile(webhook, checkId, token, client, file)
 	}
 
 	// Check for JavaScript files, same as Java
 	if strings.HasSuffix(file.Filename, ".js") {
-		return checkJavaFile(webhook, checkId, token, client, file)
+		return checker.checkJavaFile(webhook, checkId, token, client, file)
 	}
 
 	// Check for Yaml files
 	if strings.HasSuffix(file.Filename, ".yaml") {
-		return checkYamlFile(webhook, checkId, token, client, file)
+		return checker.checkYamlFile(webhook, checkId, token, client, file)
 	}
 
 	// Check for Bash Script files, same as Yaml
 	if strings.HasSuffix(file.Filename, ".sh") {
-		return checkYamlFile(webhook, checkId, token, client, file)
+		return checker.checkYamlFile(webhook, checkId, token, client, file)
 	}
 
 	// Not a file we are concerned about
-	return nil
+	return nil, err
 }
 
-func checkJavaFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) *CheckError {
+func (checker *CheckerImpl) checkJavaFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) (*CheckError, error) {
 	log.Printf("(%v) Checking file %v - %v\n", checkId, file.Filename, file.Sha)
 	var checkError *CheckError = nil
-	content, err := getFileContent(token, client, &file.ContentsURL)
+	var content string
+	var err error = nil
+	content, err = checker.getFileContent(token, client, &file.ContentsURL)
 	if err != nil {
 		fatalMessage := fmt.Sprintf("Failed to access the content of the file for checking - %v", err)
 		checkError = &CheckError{
@@ -165,36 +208,36 @@ func checkJavaFile(webhook *Webhook, checkId int, token *string, client *http.Cl
 			Location: 0,
 		}
 	} else {
-		checkError = checkJavaFileContent(content, file.Filename)
+		checkError = checker.checkJavaFileContent(content, file.Filename)
 	}
 
-	return checkError
+	return checkError, err
 }
 
-func checkJavaFileContent(content string, fileName string) *CheckError {
+func (checker *CheckerImpl) checkJavaFileContent(content string, fileName string) *CheckError {
 
 	var checkError *CheckError = nil
 	var fileType = "java"
 
-	commentBlockLocation := javaCommentBlockPattern.FindStringIndex(content)
+	commentBlockLocation := checker.javaCommentBlockPattern.FindStringIndex(content)
 
 	if commentBlockLocation == nil {
 		checkError = &CheckError{
 			Path:     fileName,
-			Message:  "Did not find comment block." + javaExpectedCopyrightMessage,
+			Message:  "Did not find comment block." + checker.javaExpectedCopyrightMessage,
 			Location: 0,
 		}
 	} else {
 		commentBlock := content[commentBlockLocation[0]:commentBlockLocation[1]]
 
-		checkError = checkCommentBlock(&commentBlock, fileName, fileType)
+		checkError = checker.checkCommentBlock(&commentBlock, fileName, fileType)
 
 		if checkError == nil {
 			// last check,  the first comment block should be at the top
 			if commentBlockLocation[0] != 0 {
 				checkError = &CheckError{
 					Path:     fileName,
-					Message:  "Comment block containing copyright should be at the top of the file." + javaExpectedCopyrightMessage,
+					Message:  "Comment block containing copyright should be at the top of the file." + checker.javaExpectedCopyrightMessage,
 					Location: commentBlockLocation[0],
 				}
 			}
@@ -204,26 +247,28 @@ func checkJavaFileContent(content string, fileName string) *CheckError {
 	return checkError
 }
 
-func checkYamlFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) *CheckError {
+func (checker *CheckerImpl) checkYamlFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) (*CheckError, error) {
 	log.Printf("(%v) Checking file %v - %v\n", checkId, file.Filename, file.Sha)
 
 	var checkError *CheckError = nil
-	content, err := getFileContent(token, client, &file.ContentsURL)
+	var err error = nil
+	var content string
+	content, err = checker.getFileContent(token, client, &file.ContentsURL)
 	if err != nil {
 		fatalMessage := fmt.Sprintf("Failed to access the content of the file for checking - %v", err)
-		return &CheckError{
+		checkError = &CheckError{
 			Path:     file.Filename,
 			Message:  fatalMessage,
 			Location: 0,
 		}
 	} else {
-		checkError = checkYamlFileContent(content, file.Filename)
+		checkError = checker.checkYamlFileContent(content, file.Filename)
 	}
 
-	return checkError
+	return checkError, err
 }
 
-func checkYamlFileContent(content string, fileName string) *CheckError {
+func (checker *CheckerImpl) checkYamlFileContent(content string, fileName string) *CheckError {
 	var checkError *CheckError = nil
 	var fileType = "yaml"
 
@@ -251,28 +296,28 @@ func checkYamlFileContent(content string, fileName string) *CheckError {
 	if commentBlock == "" {
 		checkError = &CheckError{
 			Path:     fileName,
-			Message:  "A comment block is missing at the start of the file." + hashExpectedCopyrightMessage,
+			Message:  "A comment block is missing at the start of the file." + checker.hashExpectedCopyrightMessage,
 			Location: 0,
 		}
 	} else {
-		checkError = checkCommentBlock(&commentBlock, fileName, fileType)
+		checkError = checker.checkCommentBlock(&commentBlock, fileName, fileType)
 	}
 
 	return checkError
 }
 
-func checkCommentBlock(commentBlock *string, fileName string, fileType string) *CheckError {
+func (checker *CheckerImpl) checkCommentBlock(commentBlock *string, fileName string, fileType string) *CheckError {
 	var checkError *CheckError = nil
 	var copyrights [][]int
 	var expectedCopyrightMessage string
 
 	// Check to see if it has the copyright text
 	if fileType == "java" {
-		copyrights = javaCopyrightPattern.FindAllStringSubmatchIndex(*commentBlock, -1)
-		expectedCopyrightMessage = javaExpectedCopyrightMessage
+		copyrights = checker.javaCopyrightPattern.FindAllStringSubmatchIndex(*commentBlock, -1)
+		expectedCopyrightMessage = checker.javaExpectedCopyrightMessage
 	} else if fileType == "yaml" {
-		copyrights = hashCopyrightPattern.FindAllStringSubmatchIndex(*commentBlock, -1)
-		expectedCopyrightMessage = hashExpectedCopyrightMessage
+		copyrights = checker.hashCopyrightPattern.FindAllStringSubmatchIndex(*commentBlock, -1)
+		expectedCopyrightMessage = checker.hashExpectedCopyrightMessage
 	}
 
 	if len(copyrights) <= 0 {
@@ -294,154 +339,187 @@ func checkCommentBlock(commentBlock *string, fileName string, fileType string) *
 	return checkError
 }
 
-func getFileContent(token *string, client *http.Client, contentURL *string) (string, *error) {
-	req, err := http.NewRequest("GET", *contentURL, nil)
-	if err != nil {
-		return "", &err
-	}
-	req.Header.Add("Authorization", "Bearer "+*token)
-	req.Header.Add("Accept", "application/vnd.github.v3.raw")
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", &err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		newError := errors.New("invalid response from content fetch " + resp.Status)
-		return "", &newError
+func (checker *CheckerImpl) getFileContent(token *string, client *http.Client, contentURL *string) (string, error) {
+	contents := ""
+
+	var err error = nil
+	var req *http.Request
+	req, err = http.NewRequest("GET", *contentURL, nil)
+	if err == nil {
+
+		req.Header.Add("Authorization", "Bearer "+*token)
+		req.Header.Add("Accept", "application/vnd.github.v3.raw")
+		var resp *http.Response
+		resp, err = client.Do(req)
+		if err == nil {
+
+			defer resp.Body.Close()
+			if resp.StatusCode != 200 {
+				err = errors.New("invalid response from content fetch " + resp.Status)
+			} else {
+
+				var bodyBytes []byte
+				bodyBytes, err = io.ReadAll(resp.Body)
+				if err == nil {
+
+					contents = string(bodyBytes)
+				}
+			}
+		}
 	}
 
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", &err
-	}
-
-	return string(bodyBytes), nil
+	return contents, err
 }
 
-func createCheckRun(webhook *Webhook, headSha *string) *string {
+// Create a 'check run' on github.
+func (checker *CheckerImpl) CreateCheckRun(webhook *Webhook, headSha *string) (*string, error) {
+
+	var url *string = nil
+
 	installationId := webhook.Installation.Id
 
-	token := getToken(installationId)
+	var err error = nil
+	var token string
+	token, err = checker.tokenSupplier.GetToken(installationId)
+	if err == nil {
 
-	client := &http.Client{}
+		client := &http.Client{}
 
-	checkRun := CheckRun{
-		Name:    "copyright",
-		HeadSha: headSha,
-		Status:  "in_progress",
-		Output: CheckRunOutput{
-			Title:   "Galasa copyright check",
-			Summary: "Checks for updated copyright years and licence text",
-		},
-	}
-
-	checkRunBytes, err := json.Marshal(&checkRun)
-	if err != nil {
-		panic(err) // TODO
-	}
-
-	req, err := http.NewRequest("POST", webhook.Repository.RepositoryURL+"/check-runs", bytes.NewReader(checkRunBytes))
-	if err != nil {
-		panic(err) // TODO
-	}
-	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Add("Accept", "application/vnd.github.v3+json")
-	req.Header.Add("Content-Type", "application/vnd.github.v3+json")
-	resp, err := client.Do(req)
-	if err != nil {
-		panic(err) // TODO
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		panic(err) // TODO
-	}
-
-	if resp.StatusCode != 201 {
-		panic(resp.StatusCode) // TODO
-	}
-
-	var response CheckRun
-
-	err = json.Unmarshal(bodyBytes, &response)
-	if err != nil {
-		panic(err) // TODO
-	}
-
-	return response.Url
-}
-
-func updateCheckRun(webhook *Webhook, checkRunURL *string, errors *[]CheckError, fatalError *string) {
-	token := getToken(webhook.Installation.Id)
-
-	client := &http.Client{}
-
-	checkRun := CheckRun{
-		Name:   "copyright",
-		Status: "completed",
-		Output: CheckRunOutput{
-			Title:   "Galasa copyright check",
-			Summary: "Checks for updated copyright years and licence text",
-		},
-	}
-
-	conclusion := "success"
-
-	if fatalError != nil {
-		conclusion = "failure"
-		checkRun.Output.Summary = *fatalError
-	} else if len(*errors) > 0 {
-		conclusion = "failure"
-		annotations := make([]CheckRunAnnotation, 0)
-
-		for _, error := range *errors {
-			annotation := CheckRunAnnotation{
-				Path:      error.Path,
-				Message:   error.Message,
-				Level:     "failure",
-				StartLine: 1,
-				EndLine:   1,
-			}
-			annotations = append(annotations, annotation)
+		checkRun := CheckRun{
+			Name:    "copyright",
+			HeadSha: headSha,
+			Status:  "in_progress",
+			Output: CheckRunOutput{
+				Title:   "Galasa copyright check",
+				Summary: "Checks for updated copyright years and licence text",
+			},
 		}
 
-		checkRun.Output.Annotations = &annotations
-	}
-	checkRun.Conclusion = &conclusion
+		var checkRunBytes []byte
+		checkRunBytes, err = json.Marshal(&checkRun)
+		if err == nil {
 
-	checkRunBytes, err := json.Marshal(&checkRun)
+			// Post a status back to github.
+			var req *http.Request
+			req, err = http.NewRequest("POST", webhook.Repository.RepositoryURL+"/check-runs", bytes.NewReader(checkRunBytes))
+			if err == nil {
+
+				req.Header.Add("Authorization", "Bearer "+token)
+				req.Header.Add("Accept", "application/vnd.github.v3+json")
+				req.Header.Add("Content-Type", "application/vnd.github.v3+json")
+
+				var resp *http.Response
+				resp, err = client.Do(req)
+				if err == nil {
+
+					defer resp.Body.Close()
+
+					if resp.StatusCode != 201 {
+						err = errors.New(fmt.Sprintf("Got a non-201 status code from a POST github. status code=%d", resp.StatusCode))
+					} else {
+						var bodyBytes []byte
+						bodyBytes, err = io.ReadAll(resp.Body)
+						if err == nil {
+
+							var response CheckRun
+
+							err = json.Unmarshal(bodyBytes, &response)
+							if err == nil {
+								url = response.Url
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return url, err
+
+}
+
+// Update the status of a previously-created 'check run' which exists at the end of a URL in github.
+func (checker *CheckerImpl) UpdateCheckRun(webhook *Webhook, checkRunURL *string, checkErrors *[]CheckError, fatalError *string) error {
+
+	var err error = nil
+	var token string
+
+	token, err = checker.tokenSupplier.GetToken(webhook.Installation.Id)
+	if err == nil {
+
+		client := &http.Client{}
+
+		checkRun := CheckRun{
+			Name:   "copyright",
+			Status: "completed",
+			Output: CheckRunOutput{
+				Title:   "Galasa copyright check",
+				Summary: "Checks for updated copyright years and licence text",
+			},
+		}
+
+		conclusion := "success"
+
+		if fatalError != nil {
+			conclusion = "failure"
+			checkRun.Output.Summary = *fatalError
+		} else if len(*checkErrors) > 0 {
+			conclusion = "failure"
+			annotations := make([]CheckRunAnnotation, 0)
+
+			for _, error := range *checkErrors {
+				annotation := CheckRunAnnotation{
+					Path:      error.Path,
+					Message:   error.Message,
+					Level:     "failure",
+					StartLine: 1,
+					EndLine:   1,
+				}
+				annotations = append(annotations, annotation)
+			}
+
+			checkRun.Output.Annotations = &annotations
+		}
+		checkRun.Conclusion = &conclusion
+
+		var checkRunBytes []byte
+		checkRunBytes, err = json.Marshal(&checkRun)
+		if err == nil {
+
+			var req *http.Request
+			req, err = http.NewRequest("PATCH", *checkRunURL, bytes.NewReader(checkRunBytes))
+			if err == nil {
+
+				req.Header.Add("Authorization", "Bearer "+token)
+				req.Header.Add("Accept", "application/vnd.github.v3+json")
+				req.Header.Add("Content-Type", "application/vnd.github.v3+json")
+
+				var resp *http.Response
+				resp, err = client.Do(req)
+				if err == nil {
+
+					defer resp.Body.Close()
+
+					var bodyBytes []byte
+					bodyBytes, err = io.ReadAll(resp.Body)
+					if err == nil {
+
+						data := string(bodyBytes)
+
+						if resp.StatusCode != 200 {
+							log.Fatalf("Fatal error - %v", data)
+							err = errors.New(fmt.Sprintf("Non-200 status returned from github. %d", resp.StatusCode))
+						}
+					}
+				}
+			}
+
+		}
+	}
+
 	if err != nil {
 		log.Fatalf("Fatal error - %v", err)
-		return
 	}
 
-	req, err := http.NewRequest("PATCH", *checkRunURL, bytes.NewReader(checkRunBytes))
-	if err != nil {
-		log.Fatalf("Fatal error - %v", err)
-		return
-	}
-	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Add("Accept", "application/vnd.github.v3+json")
-	req.Header.Add("Content-Type", "application/vnd.github.v3+json")
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Fatalf("Fatal error - %v", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Fatal error - %v", err)
-		return
-	}
-
-	data := string(bodyBytes)
-
-	if resp.StatusCode != 200 {
-		log.Fatalf("Fatal error - %v", data)
-		return
-	}
+	return err
 }
