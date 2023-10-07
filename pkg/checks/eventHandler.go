@@ -68,7 +68,7 @@ func (this *EventHandlerImpl) HandleEvent(w http.ResponseWriter, r *http.Request
 	var webhook Webhook
 	err = json.Unmarshal(jsonBytes, &webhook)
 	if err != nil {
-		log.Fatalf("Parse webhook failed - %v\n", err)
+		log.Printf("Parse webhook failed - %v\n", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -91,37 +91,43 @@ func (this *EventHandlerImpl) performCheckSuite(webhook *Webhook) error {
 	var err error = nil
 
 	if webhook.Action != "requested" {
-		return err
-	}
-
-	log.Printf("Performing check suite tests on (%v) - repository %v\n", webhook.CheckSuite.Id, webhook.Repository.RepositoryURL)
-	var checkRunURL *string
-	if len(*webhook.CheckSuite.PullRequests) > 0 {
-		// We have pull requests so will use that to obtain a list of files to check
-
-		checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckSuite.HeadSha)
-
-		if err == nil {
-			pullRequests := webhook.CheckSuite.PullRequests
-			errors := this.performPullRequestChecks(webhook, webhook.CheckSuite.Id, checkRunURL, pullRequests)
-
-			if len(*errors) > 0 {
-				log.Printf("(%v) Errors found with check suite", webhook.CheckSuite.Id)
-			}
-		}
-	} else if webhook.CheckSuite.Before != nil && webhook.CheckSuite.After != nil {
-		checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckSuite.HeadSha)
-		if err == nil {
-
-			var checkErrors *[]CheckError
-			checkErrors, err = this.performBeforeAfterChecks(webhook, webhook.CheckSuite.Id, checkRunURL, webhook.CheckSuite.Before, webhook.CheckSuite.After)
-			if len(*checkErrors) > 0 {
-				log.Printf("(%v) Errors found with check suite", webhook.CheckSuite.Id)
-			}
-		}
+		err = errors.New("Error: Webhook action is not 'requested' so not performing suite check.")
 	} else {
-		log.Println("Unrecognised payload for check suite")
+
+		log.Printf("Performing check suite tests on (%v) - repository %v\n", webhook.CheckSuite.Id, webhook.Repository.RepositoryURL)
+		var checkRunURL *string
+		if len(*webhook.CheckSuite.PullRequests) > 0 {
+			// We have pull requests so will use that to obtain a list of files to check
+
+			checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckSuite.HeadSha)
+
+			if err == nil {
+				pullRequests := webhook.CheckSuite.PullRequests
+				errors := this.performPullRequestChecks(webhook, webhook.CheckSuite.Id, checkRunURL, pullRequests)
+
+				if len(*errors) > 0 {
+					log.Printf("(%v) Errors found with check suite", webhook.CheckSuite.Id)
+				}
+			}
+		} else if webhook.CheckSuite.Before != nil && webhook.CheckSuite.After != nil {
+			checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckSuite.HeadSha)
+			if err == nil {
+
+				var checkErrors *[]CheckError
+				checkErrors, err = this.performBeforeAfterChecks(webhook, webhook.CheckSuite.Id, checkRunURL, webhook.CheckSuite.Before, webhook.CheckSuite.After)
+				if len(*checkErrors) > 0 {
+					log.Printf("(%v) Errors found with check suite", webhook.CheckSuite.Id)
+				}
+			}
+		} else {
+			log.Println("Unrecognised payload for check suite")
+		}
 	}
+
+	if err != nil {
+		log.Printf("Error: Failed to check suite. Reason: %s\n", err.Error())
+	}
+
 	return err
 }
 
@@ -130,68 +136,85 @@ func (this *EventHandlerImpl) performCheckRun(webhook *Webhook) error {
 	var err error = nil
 
 	if webhook.Action != "rerequested" {
-		return err
-	}
-
-	log.Printf("Performing check run tests on (%v) - repository %v\n", webhook.CheckRun.Id, webhook.Repository.RepositoryURL)
-
-	var checkRunURL *string
-	if len(*webhook.CheckRun.CheckSuite.PullRequests) > 0 {
-		checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckRun.HeadSha)
-
-		if err == nil {
-			// We have pull requests so will use that to obtain a list of files to check
-			pullRequests := webhook.CheckRun.CheckSuite.PullRequests
-			errors := this.performPullRequestChecks(webhook, webhook.CheckRun.Id, checkRunURL, pullRequests)
-
-			if len(*errors) > 0 {
-				log.Printf("(%v) Errors found with check run", webhook.CheckRun.Id)
-			}
-		}
-	} else if webhook.CheckRun.CheckSuite.Before != nil && webhook.CheckRun.CheckSuite.After != nil {
-		checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckRun.HeadSha)
-		if err == nil {
-			var checkErrors *[]CheckError
-			checkErrors, err = this.performBeforeAfterChecks(webhook, webhook.CheckRun.Id, checkRunURL, webhook.CheckRun.CheckSuite.Before, webhook.CheckRun.CheckSuite.After)
-			if len(*checkErrors) > 0 {
-				log.Printf("(%v) Errors found with check run", webhook.CheckRun.Id)
-			}
-		}
+		err = errors.New("Failed to perform check run because webhook action is not rerequested.")
 	} else {
-		log.Println("Unrecognised payload for check run")
+
+		log.Printf("Performing check run tests on (%v) - repository %v\n", webhook.CheckRun.Id, webhook.Repository.RepositoryURL)
+
+		var checkRunURL *string
+		if len(*webhook.CheckRun.CheckSuite.PullRequests) > 0 {
+			checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckRun.HeadSha)
+
+			if err == nil {
+				// We have pull requests so will use that to obtain a list of files to check
+				pullRequests := webhook.CheckRun.CheckSuite.PullRequests
+				errors := this.performPullRequestChecks(webhook, webhook.CheckRun.Id, checkRunURL, pullRequests)
+
+				if len(*errors) > 0 {
+					log.Printf("(%v) Errors found with check run", webhook.CheckRun.Id)
+				}
+			}
+		} else if webhook.CheckRun.CheckSuite.Before != nil && webhook.CheckRun.CheckSuite.After != nil {
+			checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckRun.HeadSha)
+			if err == nil {
+				var checkErrors *[]CheckError
+				checkErrors, err = this.performBeforeAfterChecks(webhook, webhook.CheckRun.Id, checkRunURL, webhook.CheckRun.CheckSuite.Before, webhook.CheckRun.CheckSuite.After)
+				if len(*checkErrors) > 0 {
+					log.Printf("(%v) Errors found with check run", webhook.CheckRun.Id)
+				}
+			}
+		} else {
+			log.Println("Unrecognised payload for check run")
+		}
 	}
+
+	if err != nil {
+		log.Printf("Error: Failed to check run. Reason: %s\n", err.Error())
+	}
+
 	return err
 }
 
 func (this *EventHandlerImpl) performPullRequest(webhook *Webhook) error {
 	var err error = nil
 
-	if webhook.PullRequest == nil || webhook.PullRequest.Head.Sha == "" {
-		return err
-	}
+	if webhook.PullRequest == nil {
+		err = errors.New("Cannot process a null pull request ")
+	} else {
+		if webhook.PullRequest.Head.Sha == "" {
+			err = errors.New("Cannot process a pull request with an empty Sha")
+		} else {
+			log.Printf("Performing pull request open tests on (%v) - repository %v\n", webhook.PullRequest.Number, webhook.Repository.RepositoryURL)
 
-	log.Printf("Performing pull request open tests on (%v) - repository %v\n", webhook.PullRequest.Number, webhook.Repository.RepositoryURL)
+			if webhook.Action == "synchronize" {
+				if webhook.PullRequest.Head.Repo.Id == webhook.PullRequest.Base.Repo.Id {
+					err = errors.New(fmt.Sprintf("(%v) ignoring pr sync for same repo prs, as rerequest should be issued", webhook.PullRequest.Number))
+				}
+			}
 
-	if webhook.Action == "synchronize" {
-		if webhook.PullRequest.Head.Repo.Id == webhook.PullRequest.Base.Repo.Id {
-			log.Printf("(%v) ignoring pr sync for same repo prs, as rerequest should be issued", webhook.PullRequest.Number)
-			return err
+			if err == nil {
+
+				var checkRunURL *string
+				checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.PullRequest.Head.Sha)
+
+				if err == nil {
+					pullRequests := make([]WebhookPullRequest, 0)
+					pullRequests = append(pullRequests, *webhook.PullRequest)
+
+					checkErrors := this.performPullRequestChecks(webhook, webhook.PullRequest.Number, checkRunURL, &pullRequests)
+
+					if len(*checkErrors) > 0 {
+						err = errors.New(fmt.Sprintf("(%v) Errors found with pull request open", webhook.PullRequest.Number))
+					}
+				}
+			}
 		}
 	}
 
-	var checkRunURL *string
-	checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.PullRequest.Head.Sha)
-
-	if err == nil {
-		pullRequests := make([]WebhookPullRequest, 0)
-		pullRequests = append(pullRequests, *webhook.PullRequest)
-
-		errors := this.performPullRequestChecks(webhook, webhook.PullRequest.Number, checkRunURL, &pullRequests)
-
-		if len(*errors) > 0 {
-			log.Printf("(%v) Errors found with pull request open", webhook.PullRequest.Number)
-		}
+	if err != nil {
+		log.Printf("Error: Failed to check run. Reason: %s\n", err.Error())
 	}
+
 	return err
 }
 
@@ -204,7 +227,7 @@ func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId
 		var newCheckErrors *[]CheckError
 		newCheckErrors, err = this.checker.CheckPullRequest(webhook, checkId, pr.Url)
 		if err != nil {
-			log.Fatalf("(%v) Fatal error - %v", checkId, err)
+			log.Printf("(%v) Fatal error - %v", checkId, err)
 			fatalError := fmt.Sprintf("Fatal error - %v", err)
 			this.checker.UpdateCheckRun(webhook, checkRunURL, &checkErrors, &fatalError)
 		}
@@ -304,7 +327,8 @@ func (this *EventHandlerImpl) performBeforeAfterChecks(webhook *Webhook, checkId
 			}
 
 			for _, file := range *files.Files {
-				newCheckError, err := this.checker.CheckFile(webhook, checkId, &token, client, &file)
+				var newCheckError *CheckError
+				newCheckError, err = this.checker.CheckFile(webhook, checkId, &token, client, &file)
 				if err == nil {
 					if newCheckError != nil {
 						log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newCheckError.Message)
@@ -325,6 +349,6 @@ func (this *EventHandlerImpl) performBeforeAfterChecks(webhook *Webhook, checkId
 }
 
 func (this *EventHandlerImpl) setAdhocError(webhook *Webhook, checkId int, checkRunURL *string, message string) {
-	log.Fatalf("(%v) %v", checkId, message)
+	log.Printf("(%v) %v", checkId, message)
 	this.checker.UpdateCheckRun(webhook, checkRunURL, nil, &message)
 }

@@ -76,7 +76,7 @@ func (checker *CheckerImpl) CheckPullRequest(webhook *Webhook, checkId int, pull
 	var err error = nil
 	installationId := webhook.Installation.Id
 
-	checkErrors := make([]CheckError, 0)
+	var checkErrors []CheckError = nil
 
 	var token string
 	token, err = checker.tokenSupplier.GetToken(installationId)
@@ -160,34 +160,36 @@ func (checker *CheckerImpl) CheckFile(webhook *Webhook, checkId int, token *stri
 		return nil, err
 	}
 
-	// Check for Java files
-	if strings.HasSuffix(file.Filename, ".java") {
-		return checker.checkJavaFile(webhook, checkId, token, client, file)
-	}
+	fileExtension := extractFileExtension(file.Filename)
 
-	// Check for Go files, same as java
-	if strings.HasSuffix(file.Filename, ".go") {
+	switch fileExtension {
+	case ".java":
+		// Check for Java files
 		return checker.checkJavaFile(webhook, checkId, token, client, file)
-	}
 
-	// Check for Typescript files, same as Java
-	if strings.HasSuffix(file.Filename, ".ts") || strings.HasSuffix(file.Filename, ".tsx") {
+	case ".go":
+		// Check for Go files, same as java
 		return checker.checkJavaFile(webhook, checkId, token, client, file)
-	}
 
-	// Check for JavaScript files, same as Java
-	if strings.HasSuffix(file.Filename, ".js") {
+	case ".ts":
+		// Check for Typescript files, same as Java
 		return checker.checkJavaFile(webhook, checkId, token, client, file)
-	}
 
-	// Check for Yaml files
-	if strings.HasSuffix(file.Filename, ".yaml") {
+	case ".tsx":
+		return checker.checkJavaFile(webhook, checkId, token, client, file)
+
+	case ".js":
+		// Check for JavaScript files, same as Java
+		return checker.checkJavaFile(webhook, checkId, token, client, file)
+
+	case ".yaml":
+		// Check for Yaml files
 		return checker.checkYamlFile(webhook, checkId, token, client, file)
-	}
 
-	// Check for Bash Script files, same as Yaml
-	if strings.HasSuffix(file.Filename, ".sh") {
+	case ".sh":
+		// Check for Bash Script files, same as Yaml
 		return checker.checkYamlFile(webhook, checkId, token, client, file)
+
 	}
 
 	// Not a file we are concerned about
@@ -507,7 +509,7 @@ func (checker *CheckerImpl) UpdateCheckRun(webhook *Webhook, checkRunURL *string
 						data := string(bodyBytes)
 
 						if resp.StatusCode != 200 {
-							log.Fatalf("Fatal error - %v", data)
+							log.Printf("Fatal error - %v\n", data)
 							err = errors.New(fmt.Sprintf("Non-200 status returned from github. %d", resp.StatusCode))
 						}
 					}
@@ -518,7 +520,7 @@ func (checker *CheckerImpl) UpdateCheckRun(webhook *Webhook, checkRunURL *string
 	}
 
 	if err != nil {
-		log.Fatalf("Fatal error - %v", err)
+		log.Printf("Fatal error - %v\n", err)
 	}
 
 	return err
