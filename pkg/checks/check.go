@@ -93,7 +93,7 @@ func (checker *CheckerImpl) CheckPullRequest(webhook *Webhook, checkId int, pull
 		var allFiles []File
 		client := &http.Client{}
 
-		allFiles, err = getFilesChangedByPullRequest(client, token, pullRequestUrl)
+		allFiles, err = getFilesChanged(client, token, pullRequestUrl)
 
 		for _, file := range allFiles {
 			var newError *checkTypes.CheckError

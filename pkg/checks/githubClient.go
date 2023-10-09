@@ -18,7 +18,7 @@ import (
 	"github.com/galasa-dev/githubapp-copyright/pkg/checkTypes"
 )
 
-func getFilesChangedByPullRequest(httpClient *http.Client, token string, pullRequestUrl string) ([]File, error) {
+func getFilesChanged(httpClient *http.Client, token string, baseUrl string) ([]File, error) {
 
 	var err error = nil
 
@@ -29,11 +29,11 @@ func getFilesChangedByPullRequest(httpClient *http.Client, token string, pullReq
 	for pageNumber := 1; ; pageNumber++ {
 
 		var pageFiles []File
-		pageFiles, err = getPageOfPullRequestChanges(httpClient, token, pullRequestUrl, pageNumber)
+		pageFiles, err = getPageOfChangedFileNames(httpClient, token, baseUrl, pageNumber)
 		if err != nil {
 			// Failed to get the list of files for page xxx
 		} else {
-			// Build the super-list of all files for this PR
+			// Build the super-list of all files for this change
 			allFiles = append(allFiles, pageFiles...)
 		}
 
@@ -44,16 +44,16 @@ func getFilesChangedByPullRequest(httpClient *http.Client, token string, pullReq
 	return allFiles, err
 }
 
-func getPageOfPullRequestChanges(
+func getPageOfChangedFileNames(
 	httpClient *http.Client,
 	token string,
-	pullRequestUrl string,
+	baseUrl string,
 	page int,
 ) ([]File, error) {
 
 	var err error = nil
 	var files []File
-	filesUrl := fmt.Sprintf("%v/files?page=%v", pullRequestUrl, page)
+	filesUrl := fmt.Sprintf("%v/files?page=%v", baseUrl, page)
 
 	var req *http.Request
 	req, err = http.NewRequest("GET", filesUrl, nil)
@@ -71,9 +71,9 @@ func getPageOfPullRequestChanges(
 			if resp.StatusCode != 200 {
 				err = errors.New(
 					fmt.Sprintf(
-						"Failed to get page %d of changed file names from pull request %s. Return code was not OK. code=%v\n",
+						"Failed to get page %d of changed file names from %s. Return code was not OK. code=%v\n",
 						page,
-						pullRequestUrl,
+						baseUrl,
 						resp.StatusCode,
 					),
 				)
@@ -134,9 +134,9 @@ func getFileContent(token *string, client *http.Client, contentURL *string) (str
 }
 
 // Create a 'check run' on github.
-func CreateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, headSha *string) (*string, error) {
+func CreateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, headSha string) (string, error) {
 
-	var url *string = nil
+	var url string = ""
 
 	installationId := webhook.Installation.Id
 
@@ -149,7 +149,7 @@ func CreateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, headSha *stri
 
 		checkRun := CheckRun{
 			Name:    "copyright",
-			HeadSha: headSha,
+			HeadSha: &headSha,
 			Status:  "in_progress",
 			Output: CheckRunOutput{
 				Title:   "Galasa copyright check",
@@ -187,7 +187,7 @@ func CreateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, headSha *stri
 
 							err = json.Unmarshal(bodyBytes, &response)
 							if err == nil {
-								url = response.Url
+								url = *response.Url
 							}
 						}
 					}
@@ -204,9 +204,9 @@ func CreateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, headSha *stri
 func UpdateCheckRun(
 	tokenSupplier TokenSupplier,
 	webhook *Webhook,
-	checkRunURL *string,
+	checkRunURL string,
 	checkErrors *[]checkTypes.CheckError,
-	fatalError *string,
+	fatalError string,
 ) error {
 
 	var err error = nil
@@ -228,9 +228,9 @@ func UpdateCheckRun(
 
 		conclusion := "success"
 
-		if fatalError != nil {
+		if fatalError != "" {
 			conclusion = "failure"
-			checkRun.Output.Summary = *fatalError
+			checkRun.Output.Summary = fatalError
 		} else if len(*checkErrors) > 0 {
 			conclusion = "failure"
 			annotations := make([]CheckRunAnnotation, 0)
@@ -255,7 +255,7 @@ func UpdateCheckRun(
 		if err == nil {
 
 			var req *http.Request
-			req, err = http.NewRequest("PATCH", *checkRunURL, bytes.NewReader(checkRunBytes))
+			req, err = http.NewRequest("PATCH", checkRunURL, bytes.NewReader(checkRunBytes))
 			if err == nil {
 
 				req.Header.Add("Authorization", "Bearer "+token)

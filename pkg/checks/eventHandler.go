@@ -37,55 +37,57 @@ func NewEventHandlerImpl(checker Checker, tokenSupplier TokenSupplier) (EventHan
 func (this *EventHandlerImpl) HandleEvent(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("Inbound event")
+	var status int = http.StatusOK
 
 	expectedUrlPath := "/githubapp/copyright/event_handler"
 	if r.URL.Path != expectedUrlPath {
 		log.Printf("Failed: Bad request. Request is not made to expected path %s", expectedUrlPath)
-		w.WriteHeader(http.StatusNotFound)
-		return
+		status = http.StatusNotFound
+	} else {
+
+		if r.Method != "POST" {
+			log.Printf("Failed: Bad request. Request type is not a POST")
+			status = http.StatusMethodNotAllowed
+		} else {
+
+			contentType := r.Header.Get("Content-Type")
+			if contentType != "application/json" {
+				log.Printf("Failed: Bad request. Content type is not application/json.")
+				status = http.StatusUnsupportedMediaType
+			} else {
+
+				var jsonBytes []byte
+				var err error = nil
+				jsonBytes, err = io.ReadAll(r.Body)
+				if err != nil {
+					log.Printf("Failed to read the request body. Ignoring. reason: %v", err)
+					status = http.StatusInternalServerError
+				} else {
+
+					var webhook Webhook
+					err = json.Unmarshal(jsonBytes, &webhook)
+					if err != nil {
+						log.Printf("Parse webhook failed - %v\n", err)
+						status = http.StatusInternalServerError
+					} else {
+
+						log.Printf("    Received action %v\n", webhook.Action)
+
+						if webhook.CheckSuite != nil {
+							go this.performCheckSuite(&webhook)
+						} else if webhook.CheckRun != nil {
+							go this.performCheckRun(&webhook)
+						} else if webhook.Action == "opened" || webhook.Action == "synchronize" {
+							go this.performPullRequest(&webhook)
+						}
+					}
+				}
+			}
+
+		}
 	}
 
-	if r.Method != "POST" {
-		log.Printf("Failed: Bad request. Request type is not a POST")
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	contentType := r.Header.Get("Content-Type")
-	if contentType != "application/json" {
-		log.Printf("Failed: Bad request. Content type is not application/json.")
-		w.WriteHeader(http.StatusUnsupportedMediaType)
-		return
-	}
-
-	var jsonBytes []byte
-	var err error = nil
-	jsonBytes, err = io.ReadAll(r.Body)
-	if err != nil {
-		log.Printf("Failed to read the request body. Ignoring. reason: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	var webhook Webhook
-	err = json.Unmarshal(jsonBytes, &webhook)
-	if err != nil {
-		log.Printf("Parse webhook failed - %v\n", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	log.Printf("    Received action %v\n", webhook.Action)
-
-	if webhook.CheckSuite != nil {
-		go this.performCheckSuite(&webhook)
-	} else if webhook.CheckRun != nil {
-		go this.performCheckRun(&webhook)
-	} else if webhook.Action == "opened" || webhook.Action == "synchronize" {
-		go this.performPullRequest(&webhook)
-	}
-
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(status)
 }
 
 func (this *EventHandlerImpl) performCheckSuite(webhook *Webhook) error {
@@ -97,11 +99,11 @@ func (this *EventHandlerImpl) performCheckSuite(webhook *Webhook) error {
 	} else {
 
 		log.Printf("Performing check suite tests on (%v) - repository %v\n", webhook.CheckSuite.Id, webhook.Repository.RepositoryURL)
-		var checkRunURL *string
+		var checkRunURL string
 		if len(*webhook.CheckSuite.PullRequests) > 0 {
 			// We have pull requests so will use that to obtain a list of files to check
 
-			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, &webhook.CheckSuite.HeadSha)
+			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, webhook.CheckSuite.HeadSha)
 
 			if err == nil {
 				pullRequests := webhook.CheckSuite.PullRequests
@@ -112,12 +114,12 @@ func (this *EventHandlerImpl) performCheckSuite(webhook *Webhook) error {
 				}
 			}
 		} else if webhook.CheckSuite.Before != nil && webhook.CheckSuite.After != nil {
-			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, &webhook.CheckSuite.HeadSha)
+			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, webhook.CheckSuite.HeadSha)
 			if err == nil {
 
-				var checkErrors *[]checkTypes.CheckError
-				checkErrors, err = this.performBeforeAfterChecks(webhook, webhook.CheckSuite.Id, checkRunURL, webhook.CheckSuite.Before, webhook.CheckSuite.After)
-				if len(*checkErrors) > 0 {
+				var checkErrors []checkTypes.CheckError
+				checkErrors, err = this.performBeforeAfterChecks(webhook, webhook.CheckSuite.Id, checkRunURL, *webhook.CheckSuite.Before, *webhook.CheckSuite.After)
+				if len(checkErrors) > 0 {
 					log.Printf("(%v) Errors found with check suite", webhook.CheckSuite.Id)
 				}
 			}
@@ -143,9 +145,9 @@ func (this *EventHandlerImpl) performCheckRun(webhook *Webhook) error {
 
 		log.Printf("Performing check run tests on (%v) - repository %v\n", webhook.CheckRun.Id, webhook.Repository.RepositoryURL)
 
-		var checkRunURL *string
+		var checkRunURL string
 		if len(*webhook.CheckRun.CheckSuite.PullRequests) > 0 {
-			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, &webhook.CheckRun.HeadSha)
+			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, webhook.CheckRun.HeadSha)
 
 			if err == nil {
 				// We have pull requests so will use that to obtain a list of files to check
@@ -157,11 +159,13 @@ func (this *EventHandlerImpl) performCheckRun(webhook *Webhook) error {
 				}
 			}
 		} else if webhook.CheckRun.CheckSuite.Before != nil && webhook.CheckRun.CheckSuite.After != nil {
-			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, &webhook.CheckRun.HeadSha)
+			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, webhook.CheckRun.HeadSha)
 			if err == nil {
-				var checkErrors *[]checkTypes.CheckError
-				checkErrors, err = this.performBeforeAfterChecks(webhook, webhook.CheckRun.Id, checkRunURL, webhook.CheckRun.CheckSuite.Before, webhook.CheckRun.CheckSuite.After)
-				if len(*checkErrors) > 0 {
+				var checkErrors []checkTypes.CheckError
+				checkErrors, err = this.performBeforeAfterChecks(
+					webhook, webhook.CheckRun.Id, checkRunURL,
+					*webhook.CheckRun.CheckSuite.Before, *webhook.CheckRun.CheckSuite.After)
+				if len(checkErrors) > 0 {
 					log.Printf("(%v) Errors found with check run", webhook.CheckRun.Id)
 				}
 			}
@@ -196,8 +200,8 @@ func (this *EventHandlerImpl) performPullRequest(webhook *Webhook) error {
 
 			if err == nil {
 
-				var checkRunURL *string
-				checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, &webhook.PullRequest.Head.Sha)
+				var checkRunURL string
+				checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, webhook.PullRequest.Head.Sha)
 
 				if err == nil {
 					pullRequests := make([]WebhookPullRequest, 0)
@@ -220,7 +224,7 @@ func (this *EventHandlerImpl) performPullRequest(webhook *Webhook) error {
 	return err
 }
 
-func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId int, checkRunURL *string, pullRequests *[]WebhookPullRequest) *[]checkTypes.CheckError {
+func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId int, checkRunURL string, pullRequests *[]WebhookPullRequest) *[]checkTypes.CheckError {
 
 	checkErrors := make([]checkTypes.CheckError, 0)
 
@@ -231,7 +235,7 @@ func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId
 		if err != nil {
 			log.Printf("(%v) Fatal error - %v", checkId, err)
 			fatalError := fmt.Sprintf("Fatal error - %v", err)
-			UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, &checkErrors, &fatalError)
+			UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, &checkErrors, fatalError)
 		}
 		if newCheckErrors != nil {
 			for _, newError := range *newCheckErrors {
@@ -240,13 +244,13 @@ func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId
 		}
 	}
 
-	UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, &checkErrors, nil)
+	UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, &checkErrors, "")
 
 	return &checkErrors
 }
 
-func (this *EventHandlerImpl) performBeforeAfterChecks(webhook *Webhook, checkId int, checkRunURL *string, before *string, after *string) (*[]checkTypes.CheckError, error) {
-	log.Printf("(%v) Checking commit '%v'->'%v'", checkId, *before, *after)
+func (this *EventHandlerImpl) performBeforeAfterChecks(webhook *Webhook, checkId int, checkRunURL string, before string, after string) ([]checkTypes.CheckError, error) {
+	log.Printf("(%v) Checking commit '%v'->'%v'", checkId, before, after)
 
 	var checkErrors []checkTypes.CheckError = nil
 	var err error = nil
@@ -255,103 +259,60 @@ func (this *EventHandlerImpl) performBeforeAfterChecks(webhook *Webhook, checkId
 	token, err = this.tokenSupplier.GetToken(webhook.Installation.Id)
 
 	if err == nil {
+		var filesURL string
+		filesURL, err = this.calculateFilesUrl(webhook, checkId, checkRunURL, before, after)
 
-		filesURL := ""
-		if *before != "0000000000000000000000000000000000000000" {
-			filesURL = webhook.Repository.CompareURL
-			if filesURL == "" {
-				this.setAdhocError(webhook, checkId, checkRunURL, "request is missing compare_url")
-				return nil, err
-			}
-
-			// Retrieve the list of files in a compare
-			filesURL = strings.Replace(filesURL, "{base}", *before, 1)
-			filesURL = strings.Replace(filesURL, "{head}", *after, 1)
-		} else {
-			filesURL = webhook.Repository.CommitsURL
-			if filesURL == "" {
-				this.setAdhocError(webhook, checkId, checkRunURL, "request is missing commits_url")
-				return nil, err
-			}
-
-			filesURL = strings.Replace(filesURL, "{/sha}", "/"+*after, 1)
-		}
-
+		var allFiles []File
 		client := &http.Client{}
-		for page := 1; ; page++ {
 
-			pageUrl := fmt.Sprintf("%v?page=%v", filesURL, page)
-			var req *http.Request
-			req, err = http.NewRequest("GET", pageUrl, nil)
-			if err != nil {
-				fatalError := fmt.Sprintf("Fatal error - %v", err)
-				this.setAdhocError(webhook, checkId, checkRunURL, fatalError)
-				return nil, err
+		allFiles, err = getFilesChanged(client, token, filesURL)
+
+		for _, file := range allFiles {
+			var newCheckError *checkTypes.CheckError
+			newCheckError = this.checker.CheckFile(webhook, checkId, &token, client, &file)
+
+			if newCheckError != nil {
+				log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newCheckError.Message)
+				checkErrors = append(checkErrors, *newCheckError)
 			}
 
-			req.Header.Add("Authorization", "Bearer "+token)
-			req.Header.Add("Accept", "application/vnd.github.v3.raw")
-			var resp *http.Response
-			resp, err = client.Do(req)
-			if err != nil {
-				fatalError := fmt.Sprintf("Fatal error - %v", err)
-				this.setAdhocError(webhook, checkId, checkRunURL, fatalError)
-				return nil, err
-			}
-
-			defer resp.Body.Close()
-			if resp.StatusCode != 200 {
-				err = errors.New(fmt.Sprintf("Invalid response from content fetch - %v", resp.Status))
-				fatalError := fmt.Sprintf("invalid response from content fetch - %v", resp.Status)
-				this.setAdhocError(webhook, checkId, checkRunURL, fatalError)
-				return nil, err
-			}
-
-			var bodyBytes []byte
-			bodyBytes, err = io.ReadAll(resp.Body)
-			if err != nil {
-				fatalError := fmt.Sprintf("Fatal error - %v", err)
-				this.setAdhocError(webhook, checkId, checkRunURL, fatalError)
-				return nil, err
-			}
-
-			var files Files
-
-			err = json.Unmarshal(bodyBytes, &files)
-			if err != nil {
-				fatalError := fmt.Sprintf("Fatal error - %v", err)
-				this.setAdhocError(webhook, checkId, checkRunURL, fatalError)
-				return nil, err
-			}
-
-			// If there are no files...
-			if files.Files == nil || len(*files.Files) < 1 {
-				break
-			}
-
-			for _, file := range *files.Files {
-				var newCheckError *checkTypes.CheckError
-				newCheckError = this.checker.CheckFile(webhook, checkId, &token, client, &file)
-
-				if newCheckError != nil {
-					log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newCheckError.Message)
-					checkErrors = append(checkErrors, *newCheckError)
-				}
-
-				// Continue to check the next file also.
-			}
+			// Continue to check the next file also.
 		}
 
 		if err == nil {
-			UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, &checkErrors, nil)
+			UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, &checkErrors, "")
 		}
 	}
 
-	return &checkErrors, err
+	return checkErrors, err
 }
 
-func (this *EventHandlerImpl) setAdhocError(webhook *Webhook, checkId int, checkRunURL *string, message string) {
+func (this *EventHandlerImpl) setAdhocError(webhook *Webhook, checkId int, checkRunURL string, message string) {
 	log.Printf("(%v) %v", checkId, message)
 
-	UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, nil, &message)
+	UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, nil, message)
+}
+
+func (this *EventHandlerImpl) calculateFilesUrl(webhook *Webhook, checkId int, checkRunURL string, before string, after string) (string, error) {
+	var err error = nil
+	filesURL := ""
+	if before != "0000000000000000000000000000000000000000" {
+		filesURL = webhook.Repository.CompareURL
+		if filesURL == "" {
+			this.setAdhocError(webhook, checkId, checkRunURL, "request is missing compare_url")
+		} else {
+
+			// Retrieve the list of files in a compare
+			filesURL = strings.Replace(filesURL, "{base}", before, 1)
+			filesURL = strings.Replace(filesURL, "{head}", after, 1)
+		}
+	} else {
+		filesURL = webhook.Repository.CommitsURL
+		if filesURL == "" {
+			this.setAdhocError(webhook, checkId, checkRunURL, "request is missing commits_url")
+		} else {
+			filesURL = strings.Replace(filesURL, "{/sha}", "/"+after, 1)
+		}
+	}
+	return filesURL, err
 }
