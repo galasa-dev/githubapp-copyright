@@ -2,6 +2,8 @@
 
 This code builds a docker image, which can be deployed to kubernetes.
 
+## Running the code
+
 The program `copyright` or `copyright-amd64` is invoked with this syntax:
 
 ```
@@ -18,6 +20,7 @@ For example `copyright --githubAuthKeyFile /my/folder/key.pem`
 That lets the copyright application authenticate with github, so it can do things like ask for the file content
 of a file which is mentioned in a pull request.
 
-The key.pem file should be supplied to any deployment as a secret.
+## Deploying
 
+The key.pem file should be supplied to any deployment as a secret.
 
