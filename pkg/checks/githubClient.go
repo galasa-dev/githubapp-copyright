@@ -18,6 +18,78 @@ import (
 	"github.com/galasa-dev/githubapp-copyright/pkg/checkTypes"
 )
 
+func getFilesChangedByPullRequest(httpClient *http.Client, token string, pullRequestUrl string) ([]File, error) {
+
+	var err error = nil
+
+	// Retrieve list of files
+	var allFiles []File = make([]File, 0)
+
+	// Keep asking for pages of results until we get an empty page or an error.
+	for pageNumber := 1; ; pageNumber++ {
+
+		var pageFiles []File
+		pageFiles, err = getPageOfPullRequestChanges(httpClient, token, pullRequestUrl, pageNumber)
+		if err != nil {
+			// Failed to get the list of files for page xxx
+		} else {
+			// Build the super-list of all files for this PR
+			allFiles = append(allFiles, pageFiles...)
+		}
+
+		if pageFiles == nil || len(pageFiles) < 1 {
+			break
+		}
+	}
+	return allFiles, err
+}
+
+func getPageOfPullRequestChanges(
+	httpClient *http.Client,
+	token string,
+	pullRequestUrl string,
+	page int,
+) ([]File, error) {
+
+	var err error = nil
+	var files []File
+	filesUrl := fmt.Sprintf("%v/files?page=%v", pullRequestUrl, page)
+
+	var req *http.Request
+	req, err = http.NewRequest("GET", filesUrl, nil)
+	if err == nil {
+
+		req.Header.Add("Authorization", "Bearer "+token)
+		req.Header.Add("Accept", "application/vnd.github.v3+json")
+
+		var resp *http.Response
+		resp, err = httpClient.Do(req)
+		if err == nil {
+
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				err = errors.New(
+					fmt.Sprintf(
+						"Failed to get page %d of changed file names from pull request %s. Return code was not OK. code=%v\n",
+						page,
+						pullRequestUrl,
+						resp.StatusCode,
+					),
+				)
+			}
+
+			var bodyBytes []byte
+			bodyBytes, err = io.ReadAll(resp.Body)
+			if err == nil {
+				err = json.Unmarshal(bodyBytes, &files)
+			}
+		}
+	}
+
+	return files, err
+}
+
 func getFileContentFromGithub(token *string, client *http.Client, file *File) (string, error) {
 	log.Printf("(%v) Checking file - %v\n", file.Filename, file.Sha)
 	var content string

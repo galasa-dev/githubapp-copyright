@@ -6,9 +6,6 @@
 package checks
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"regexp"
@@ -36,6 +33,10 @@ type CheckerImpl struct {
 	hashCopyrightPattern         *regexp.Regexp
 	javaExpectedCopyrightMessage string
 	hashExpectedCopyrightMessage string
+
+	// The index is the file extension (including the dot) eg: ".java"
+	// The value is the file checker which will be used.
+	checkersByExtension map[string]fileCheckers.FileChecker
 }
 
 func NewChecker(tokenSupplier TokenSupplier) (Checker, error) {
@@ -60,6 +61,22 @@ func NewChecker(tokenSupplier TokenSupplier) (Checker, error) {
 	checker.javaExpectedCopyrightMessage = "\nExpected to see:\n/*\n * Copyright contributors to the Galasa project\n *\n * SPDX-License-Identifier: EPL-2.0\n */"
 	checker.hashExpectedCopyrightMessage = "\nExpected to see:\n#\n# Copyright contributors to the Galasa project\n#\n# SPDX-License-Identifier: EPL-2.0\n#"
 
+	var javaChecker fileCheckers.FileChecker
+	javaChecker = fileCheckers.NewJavaFileChecker()
+
+	var yamlChecker fileCheckers.FileChecker
+	yamlChecker = fileCheckers.NewYamlFileChecker()
+
+	checker.checkersByExtension = map[string]fileCheckers.FileChecker{
+		".java": javaChecker,
+		".go":   javaChecker,
+		".ts":   javaChecker,
+		".tsx":  javaChecker,
+		".js":   javaChecker,
+		".yaml": yamlChecker,
+		".sh":   yamlChecker,
+	}
+
 	return checker, err
 }
 
@@ -76,57 +93,17 @@ func (checker *CheckerImpl) CheckPullRequest(webhook *Webhook, checkId int, pull
 
 	if err != nil {
 
+		var allFiles []File
 		client := &http.Client{}
 
-		// Retrieve list of files
-		for page := 1; ; page++ {
-			filesUrl := fmt.Sprintf("%v/files?page=%v", pullRequestUrl, page)
+		allFiles, err = getFilesChangedByPullRequest(client, token, pullRequestUrl)
 
-			var req *http.Request
-			req, err = http.NewRequest("GET", filesUrl, nil)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Add("Authorization", "Bearer "+token)
-			req.Header.Add("Accept", "application/vnd.github.v3+json")
-
-			var resp *http.Response
-			resp, err = client.Do(req)
-			if err != nil {
-				return nil, err
-			}
-
-			defer resp.Body.Close()
-
-			if resp.StatusCode != 200 {
-				break
-			}
-
-			var bodyBytes []byte
-			bodyBytes, err = io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
-			}
-
-			var files []File
-
-			err = json.Unmarshal(bodyBytes, &files)
-			if err != nil {
-				return nil, err
-			}
-
-			if files == nil || len(files) < 1 {
-				break
-			}
-
-			for _, file := range files {
-				var newError *checkTypes.CheckError
-				newError = checker.CheckFile(webhook, checkId, &token, client, &file)
-				if newError != nil {
-					log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newError.Message)
-					checkErrors = append(checkErrors, *newError)
-				}
+		for _, file := range allFiles {
+			var newError *checkTypes.CheckError
+			newError = checker.CheckFile(webhook, checkId, &token, client, &file)
+			if newError != nil {
+				log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newError.Message)
+				checkErrors = append(checkErrors, *newError)
 			}
 		}
 
@@ -152,30 +129,22 @@ func (checker *CheckerImpl) CheckFile(webhook *Webhook, checkId int, token *stri
 
 	fileExtension := extractFileExtension(file.Filename)
 
-	var javaChecker fileCheckers.FileChecker
-	javaChecker = fileCheckers.NewJavaFileChecker()
+	// Decide which file checker we want to use.
+	fileChecker, isExtensionRecognised := checker.checkersByExtension[fileExtension]
 
-	var yamlChecker fileCheckers.FileChecker
-	yamlChecker = fileCheckers.NewYamlFileChecker()
+	if !isExtensionRecognised {
+		// Don't bother getting the file if we don't know how to check it for copyright.
+		log.Printf("File file %s is not checked because extension %s is not checked for copyright.\n", file.Filename, fileExtension)
+	} else {
 
-	checkerByExtension := map[string]fileCheckers.FileChecker{
-		".java": javaChecker,
-		".go":   javaChecker,
-		".ts":   javaChecker,
-		".tsx":  javaChecker,
-		".js":   javaChecker,
-		".yaml": yamlChecker,
-		".sh":   yamlChecker,
-	}
-
-	fileChecker, isExtensionRecognised := checkerByExtension[fileExtension]
-
-	if isExtensionRecognised {
 		var fileContent string
 		fileContent, err = getFileContentFromGithub(token, client, file)
 		if err == nil {
+
 			checkError = fileChecker.CheckFileContent(fileContent, file.Filename)
 		} else {
+			// Turn the error into a checker error so it fails the check in github.
+			log.Printf("Failed to check file %s. Reason: %s\n", file.Filename, err.Error())
 			checkError = &checkTypes.CheckError{
 				Path:     file.Filename,
 				Message:  err.Error(),
@@ -184,6 +153,5 @@ func (checker *CheckerImpl) CheckFile(webhook *Webhook, checkId int, token *stri
 		}
 	}
 
-	// Not a file we are concerned about
 	return checkError
 }

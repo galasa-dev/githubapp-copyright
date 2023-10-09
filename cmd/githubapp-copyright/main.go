@@ -33,7 +33,7 @@ func main() {
 			if err == nil {
 
 				var tokenSupplier checks.TokenSupplier
-				tokenSupplier, err = checks.NewTokenSupplierImpl(parsedValues.GithubAuthKeyFilePath)
+				tokenSupplier, err = checks.NewTokenSupplier(parsedValues.GithubAuthKeyFilePath)
 				if err == nil {
 
 					var checker checks.Checker

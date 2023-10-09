@@ -39,7 +39,7 @@ type TokenSupplierImpl struct {
 	tokenHttpClient http.Client
 }
 
-func NewTokenSupplierImpl(keyFilePath string) (TokenSupplier, error) {
+func NewTokenSupplier(keyFilePath string) (TokenSupplier, error) {
 
 	var err error = nil
 	this := new(TokenSupplierImpl)
