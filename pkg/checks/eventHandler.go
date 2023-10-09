@@ -269,7 +269,7 @@ func (this *EventHandlerImpl) performBeforeAfterChecks(webhook *Webhook, checkId
 
 		for _, file := range allFiles {
 			var newCheckError *checkTypes.CheckError
-			newCheckError = this.checker.CheckFile(webhook, checkId, &token, client, &file)
+			newCheckError = this.checker.CheckFile(token, client, &file)
 
 			if newCheckError != nil {
 				log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newCheckError.Message)

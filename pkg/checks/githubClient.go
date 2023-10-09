@@ -90,7 +90,7 @@ func getPageOfChangedFileNames(
 	return files, err
 }
 
-func getFileContentFromGithub(token *string, client *http.Client, file *File) (string, error) {
+func getFileContentFromGithub(token string, client *http.Client, file *File) (string, error) {
 	log.Printf("(%v) Checking file - %v\n", file.Filename, file.Sha)
 	var content string
 	var err error = nil
@@ -101,7 +101,7 @@ func getFileContentFromGithub(token *string, client *http.Client, file *File) (s
 	return content, err
 }
 
-func getFileContent(token *string, client *http.Client, contentURL *string) (string, error) {
+func getFileContent(token string, client *http.Client, contentURL *string) (string, error) {
 	contents := ""
 
 	var err error = nil
@@ -109,7 +109,7 @@ func getFileContent(token *string, client *http.Client, contentURL *string) (str
 	req, err = http.NewRequest("GET", *contentURL, nil)
 	if err == nil {
 
-		req.Header.Add("Authorization", "Bearer "+*token)
+		req.Header.Add("Authorization", "Bearer "+token)
 		req.Header.Add("Accept", "application/vnd.github.v3.raw")
 		var resp *http.Response
 		resp, err = client.Do(req)

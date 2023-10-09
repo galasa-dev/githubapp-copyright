@@ -17,7 +17,7 @@ import (
 type Checker interface {
 	CheckPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) (*[]checkTypes.CheckError, error)
 
-	CheckFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) *checkTypes.CheckError
+	CheckFile(token string, client *http.Client, file *File) *checkTypes.CheckError
 }
 
 type CheckerImpl struct {
@@ -97,7 +97,7 @@ func (checker *CheckerImpl) CheckPullRequest(webhook *Webhook, checkId int, pull
 
 		for _, file := range allFiles {
 			var newError *checkTypes.CheckError
-			newError = checker.CheckFile(webhook, checkId, &token, client, &file)
+			newError = checker.CheckFile(token, client, &file)
 			if newError != nil {
 				log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newError.Message)
 				checkErrors = append(checkErrors, *newError)
@@ -114,7 +114,7 @@ func (checker *CheckerImpl) CheckPullRequest(webhook *Webhook, checkId int, pull
 	return &checkErrors, err
 }
 
-func (checker *CheckerImpl) CheckFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) *checkTypes.CheckError {
+func (checker *CheckerImpl) CheckFile(token string, client *http.Client, file *File) *checkTypes.CheckError {
 
 	var err error = nil
 	var checkError *checkTypes.CheckError
