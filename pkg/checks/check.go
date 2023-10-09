@@ -15,7 +15,9 @@ import (
 )
 
 type Checker interface {
-	CheckPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) (*[]checkTypes.CheckError, error)
+	CheckPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) ([]checkTypes.CheckError, error)
+
+	CheckFilesChanged(token string, checkId int, url string) ([]checkTypes.CheckError, error)
 
 	CheckFile(token string, client *http.Client, file *File) *checkTypes.CheckError
 }
@@ -77,7 +79,7 @@ func NewChecker(tokenSupplier TokenSupplier) (Checker, error) {
 	return checker, err
 }
 
-func (checker *CheckerImpl) CheckPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) (*[]checkTypes.CheckError, error) {
+func (checker *CheckerImpl) CheckPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) ([]checkTypes.CheckError, error) {
 	log.Printf("(%v) Checking pullrequest '%v'", checkId, pullRequestUrl)
 
 	var err error = nil
@@ -90,19 +92,7 @@ func (checker *CheckerImpl) CheckPullRequest(webhook *Webhook, checkId int, pull
 
 	if err != nil {
 
-		var allFiles []File
-		client := &http.Client{}
-
-		allFiles, err = getFilesChanged(client, token, pullRequestUrl)
-
-		for _, file := range allFiles {
-			var newError *checkTypes.CheckError
-			newError = checker.CheckFile(token, client, &file)
-			if newError != nil {
-				log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newError.Message)
-				checkErrors = append(checkErrors, *newError)
-			}
-		}
+		checkErrors, err = checker.CheckFilesChanged(token, checkId, pullRequestUrl)
 
 		if err == nil {
 			if len(checkErrors) < 1 {
@@ -111,7 +101,32 @@ func (checker *CheckerImpl) CheckPullRequest(webhook *Webhook, checkId int, pull
 		}
 	}
 
-	return &checkErrors, err
+	return checkErrors, err
+}
+
+func (checker *CheckerImpl) CheckFilesChanged(token string, checkId int, url string) ([]checkTypes.CheckError, error) {
+	var allFiles []File
+	var err error = nil
+
+	client := &http.Client{}
+
+	var checkErrors []checkTypes.CheckError = make([]checkTypes.CheckError, 0)
+
+	allFiles, err = getFilesChanged(client, token, url)
+
+	for _, file := range allFiles {
+		var newCheckError *checkTypes.CheckError
+		newCheckError = checker.CheckFile(token, client, &file)
+
+		if newCheckError != nil {
+			log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newCheckError.Message)
+			checkErrors = append(checkErrors, *newCheckError)
+		}
+
+		// Continue to check the next file also.
+	}
+	return checkErrors, err
+
 }
 
 func (checker *CheckerImpl) CheckFile(token string, client *http.Client, file *File) *checkTypes.CheckError {

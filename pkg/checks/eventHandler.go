@@ -230,26 +230,29 @@ func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId
 
 	for _, pr := range *pullRequests {
 		var err error
-		var newCheckErrors *[]checkTypes.CheckError
+		var newCheckErrors []checkTypes.CheckError
 		newCheckErrors, err = this.checker.CheckPullRequest(webhook, checkId, pr.Url)
 		if err != nil {
 			log.Printf("(%v) Fatal error - %v", checkId, err)
 			fatalError := fmt.Sprintf("Fatal error - %v", err)
-			UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, &checkErrors, fatalError)
+			UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, checkErrors, fatalError)
 		}
 		if newCheckErrors != nil {
-			for _, newError := range *newCheckErrors {
+			for _, newError := range newCheckErrors {
 				checkErrors = append(checkErrors, newError)
 			}
 		}
 	}
 
-	UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, &checkErrors, "")
+	UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, checkErrors, "")
 
 	return &checkErrors
 }
 
-func (this *EventHandlerImpl) performBeforeAfterChecks(webhook *Webhook, checkId int, checkRunURL string, before string, after string) ([]checkTypes.CheckError, error) {
+func (this *EventHandlerImpl) performBeforeAfterChecks(
+	webhook *Webhook, checkId int, checkRunURL string,
+	before string, after string,
+) ([]checkTypes.CheckError, error) {
 	log.Printf("(%v) Checking commit '%v'->'%v'", checkId, before, after)
 
 	var checkErrors []checkTypes.CheckError = nil
@@ -262,25 +265,10 @@ func (this *EventHandlerImpl) performBeforeAfterChecks(webhook *Webhook, checkId
 		var filesURL string
 		filesURL, err = this.calculateFilesUrl(webhook, checkId, checkRunURL, before, after)
 
-		var allFiles []File
-		client := &http.Client{}
-
-		allFiles, err = getFilesChanged(client, token, filesURL)
-
-		for _, file := range allFiles {
-			var newCheckError *checkTypes.CheckError
-			newCheckError = this.checker.CheckFile(token, client, &file)
-
-			if newCheckError != nil {
-				log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newCheckError.Message)
-				checkErrors = append(checkErrors, *newCheckError)
-			}
-
-			// Continue to check the next file also.
-		}
+		checkErrors, err = this.checker.CheckFilesChanged(token, checkId, filesURL)
 
 		if err == nil {
-			UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, &checkErrors, "")
+			UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, checkErrors, "")
 		}
 	}
 

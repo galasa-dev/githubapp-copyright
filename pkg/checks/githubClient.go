@@ -205,7 +205,7 @@ func UpdateCheckRun(
 	tokenSupplier TokenSupplier,
 	webhook *Webhook,
 	checkRunURL string,
-	checkErrors *[]checkTypes.CheckError,
+	checkErrors []checkTypes.CheckError,
 	fatalError string,
 ) error {
 
@@ -231,11 +231,11 @@ func UpdateCheckRun(
 		if fatalError != "" {
 			conclusion = "failure"
 			checkRun.Output.Summary = fatalError
-		} else if len(*checkErrors) > 0 {
+		} else if len(checkErrors) > 0 {
 			conclusion = "failure"
 			annotations := make([]CheckRunAnnotation, 0)
 
-			for _, checkError := range *checkErrors {
+			for _, checkError := range checkErrors {
 				annotation := CheckRunAnnotation{
 					Path:      checkError.Path,
 					Message:   checkError.Message,
