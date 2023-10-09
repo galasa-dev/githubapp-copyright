@@ -13,6 +13,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/galasa-dev/githubapp-copyright/pkg/checkTypes"
 )
 
 type EventHandler interface {
@@ -113,7 +115,7 @@ func (this *EventHandlerImpl) performCheckSuite(webhook *Webhook) error {
 			checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckSuite.HeadSha)
 			if err == nil {
 
-				var checkErrors *[]CheckError
+				var checkErrors *[]checkTypes.CheckError
 				checkErrors, err = this.performBeforeAfterChecks(webhook, webhook.CheckSuite.Id, checkRunURL, webhook.CheckSuite.Before, webhook.CheckSuite.After)
 				if len(*checkErrors) > 0 {
 					log.Printf("(%v) Errors found with check suite", webhook.CheckSuite.Id)
@@ -157,7 +159,7 @@ func (this *EventHandlerImpl) performCheckRun(webhook *Webhook) error {
 		} else if webhook.CheckRun.CheckSuite.Before != nil && webhook.CheckRun.CheckSuite.After != nil {
 			checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckRun.HeadSha)
 			if err == nil {
-				var checkErrors *[]CheckError
+				var checkErrors *[]checkTypes.CheckError
 				checkErrors, err = this.performBeforeAfterChecks(webhook, webhook.CheckRun.Id, checkRunURL, webhook.CheckRun.CheckSuite.Before, webhook.CheckRun.CheckSuite.After)
 				if len(*checkErrors) > 0 {
 					log.Printf("(%v) Errors found with check run", webhook.CheckRun.Id)
@@ -218,13 +220,13 @@ func (this *EventHandlerImpl) performPullRequest(webhook *Webhook) error {
 	return err
 }
 
-func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId int, checkRunURL *string, pullRequests *[]WebhookPullRequest) *[]CheckError {
+func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId int, checkRunURL *string, pullRequests *[]WebhookPullRequest) *[]checkTypes.CheckError {
 
-	checkErrors := make([]CheckError, 0)
+	checkErrors := make([]checkTypes.CheckError, 0)
 
 	for _, pr := range *pullRequests {
 		var err error
-		var newCheckErrors *[]CheckError
+		var newCheckErrors *[]checkTypes.CheckError
 		newCheckErrors, err = this.checker.CheckPullRequest(webhook, checkId, pr.Url)
 		if err != nil {
 			log.Printf("(%v) Fatal error - %v", checkId, err)
@@ -243,12 +245,13 @@ func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId
 	return &checkErrors
 }
 
-func (this *EventHandlerImpl) performBeforeAfterChecks(webhook *Webhook, checkId int, checkRunURL *string, before *string, after *string) (*[]CheckError, error) {
+func (this *EventHandlerImpl) performBeforeAfterChecks(webhook *Webhook, checkId int, checkRunURL *string, before *string, after *string) (*[]checkTypes.CheckError, error) {
 	log.Printf("(%v) Checking commit '%v'->'%v'", checkId, *before, *after)
 
-	var checkErrors []CheckError = nil
+	var checkErrors []checkTypes.CheckError = nil
 	var err error = nil
 	var token string
+
 	token, err = this.tokenSupplier.GetToken(webhook.Installation.Id)
 
 	if err == nil {
@@ -327,16 +330,15 @@ func (this *EventHandlerImpl) performBeforeAfterChecks(webhook *Webhook, checkId
 			}
 
 			for _, file := range *files.Files {
-				var newCheckError *CheckError
-				newCheckError, err = this.checker.CheckFile(webhook, checkId, &token, client, &file)
-				if err == nil {
-					if newCheckError != nil {
-						log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newCheckError.Message)
-						checkErrors = append(checkErrors, *newCheckError)
-					}
-				} else {
-					break
+				var newCheckError *checkTypes.CheckError
+				newCheckError = this.checker.CheckFile(webhook, checkId, &token, client, &file)
+
+				if newCheckError != nil {
+					log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newCheckError.Message)
+					checkErrors = append(checkErrors, *newCheckError)
 				}
+
+				// Continue to check the next file also.
 			}
 		}
 

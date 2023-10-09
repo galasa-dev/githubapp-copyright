@@ -8,10 +8,11 @@ package main
 import (
 	// "encoding/json"
 	// "io/ioutil"
-	"galasa-dev/githubapp-copyright/pkg/checks"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/galasa-dev/githubapp-copyright/pkg/checks"
 )
 
 func main() {
