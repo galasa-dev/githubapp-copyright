@@ -4,7 +4,6 @@
 # SPDX-License-Identifier: EPL-2.0
 #
 
-
 all: tests bin/copyright bin/copyright-amd64
 
 source-code : ./cmd/githubapp-copyright/*.go ./pkg/checks/*.go
@@ -18,7 +17,8 @@ bin/copyright-amd64 : source-code
 tests: build/coverage.txt build/coverage.html
 
 build/coverage.out : source-code
-	go test -v -cover -coverprofile=build/coverage.out  -coverpkg ./pkg/checks ./pkg/...
+	mkdir -p build
+	go test -v -cover -coverprofile=build/coverage.out  -coverpkg ./pkg/checks,./pkg/checkTypes,./pkg/fileCheckers ./pkg/...
 
 build/coverage.html : build/coverage.out
 	go tool cover -html=build/coverage.out -o build/coverage.html
