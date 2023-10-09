@@ -18,9 +18,6 @@ type Checker interface {
 	CheckPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) (*[]checkTypes.CheckError, error)
 
 	CheckFile(webhook *Webhook, checkId int, token *string, client *http.Client, file *File) *checkTypes.CheckError
-
-	UpdateCheckRun(webhook *Webhook, checkRunURL *string, errors *[]checkTypes.CheckError, fatalError *string) error
-	CreateCheckRun(webhook *Webhook, headSha *string) (*string, error)
 }
 
 type CheckerImpl struct {

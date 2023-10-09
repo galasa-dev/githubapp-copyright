@@ -101,7 +101,7 @@ func (this *EventHandlerImpl) performCheckSuite(webhook *Webhook) error {
 		if len(*webhook.CheckSuite.PullRequests) > 0 {
 			// We have pull requests so will use that to obtain a list of files to check
 
-			checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckSuite.HeadSha)
+			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, &webhook.CheckSuite.HeadSha)
 
 			if err == nil {
 				pullRequests := webhook.CheckSuite.PullRequests
@@ -112,7 +112,7 @@ func (this *EventHandlerImpl) performCheckSuite(webhook *Webhook) error {
 				}
 			}
 		} else if webhook.CheckSuite.Before != nil && webhook.CheckSuite.After != nil {
-			checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckSuite.HeadSha)
+			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, &webhook.CheckSuite.HeadSha)
 			if err == nil {
 
 				var checkErrors *[]checkTypes.CheckError
@@ -145,7 +145,7 @@ func (this *EventHandlerImpl) performCheckRun(webhook *Webhook) error {
 
 		var checkRunURL *string
 		if len(*webhook.CheckRun.CheckSuite.PullRequests) > 0 {
-			checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckRun.HeadSha)
+			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, &webhook.CheckRun.HeadSha)
 
 			if err == nil {
 				// We have pull requests so will use that to obtain a list of files to check
@@ -157,7 +157,7 @@ func (this *EventHandlerImpl) performCheckRun(webhook *Webhook) error {
 				}
 			}
 		} else if webhook.CheckRun.CheckSuite.Before != nil && webhook.CheckRun.CheckSuite.After != nil {
-			checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.CheckRun.HeadSha)
+			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, &webhook.CheckRun.HeadSha)
 			if err == nil {
 				var checkErrors *[]checkTypes.CheckError
 				checkErrors, err = this.performBeforeAfterChecks(webhook, webhook.CheckRun.Id, checkRunURL, webhook.CheckRun.CheckSuite.Before, webhook.CheckRun.CheckSuite.After)
@@ -197,7 +197,7 @@ func (this *EventHandlerImpl) performPullRequest(webhook *Webhook) error {
 			if err == nil {
 
 				var checkRunURL *string
-				checkRunURL, err = this.checker.CreateCheckRun(webhook, &webhook.PullRequest.Head.Sha)
+				checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, &webhook.PullRequest.Head.Sha)
 
 				if err == nil {
 					pullRequests := make([]WebhookPullRequest, 0)
@@ -231,7 +231,7 @@ func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId
 		if err != nil {
 			log.Printf("(%v) Fatal error - %v", checkId, err)
 			fatalError := fmt.Sprintf("Fatal error - %v", err)
-			this.checker.UpdateCheckRun(webhook, checkRunURL, &checkErrors, &fatalError)
+			UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, &checkErrors, &fatalError)
 		}
 		if newCheckErrors != nil {
 			for _, newError := range *newCheckErrors {
@@ -240,7 +240,7 @@ func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId
 		}
 	}
 
-	this.checker.UpdateCheckRun(webhook, checkRunURL, &checkErrors, nil)
+	UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, &checkErrors, nil)
 
 	return &checkErrors
 }
@@ -343,7 +343,7 @@ func (this *EventHandlerImpl) performBeforeAfterChecks(webhook *Webhook, checkId
 		}
 
 		if err == nil {
-			this.checker.UpdateCheckRun(webhook, checkRunURL, &checkErrors, nil)
+			UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, &checkErrors, nil)
 		}
 	}
 
@@ -352,5 +352,6 @@ func (this *EventHandlerImpl) performBeforeAfterChecks(webhook *Webhook, checkId
 
 func (this *EventHandlerImpl) setAdhocError(webhook *Webhook, checkId int, checkRunURL *string, message string) {
 	log.Printf("(%v) %v", checkId, message)
-	this.checker.UpdateCheckRun(webhook, checkRunURL, nil, &message)
+
+	UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, nil, &message)
 }

@@ -134,7 +134,7 @@ func getFileContent(token *string, client *http.Client, contentURL *string) (str
 }
 
 // Create a 'check run' on github.
-func (checker *CheckerImpl) CreateCheckRun(webhook *Webhook, headSha *string) (*string, error) {
+func CreateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, headSha *string) (*string, error) {
 
 	var url *string = nil
 
@@ -142,7 +142,7 @@ func (checker *CheckerImpl) CreateCheckRun(webhook *Webhook, headSha *string) (*
 
 	var err error = nil
 	var token string
-	token, err = checker.tokenSupplier.GetToken(installationId)
+	token, err = tokenSupplier.GetToken(installationId)
 	if err == nil {
 
 		client := &http.Client{}
@@ -201,12 +201,18 @@ func (checker *CheckerImpl) CreateCheckRun(webhook *Webhook, headSha *string) (*
 }
 
 // Update the status of a previously-created 'check run' which exists at the end of a URL in github.
-func (checker *CheckerImpl) UpdateCheckRun(webhook *Webhook, checkRunURL *string, checkErrors *[]checkTypes.CheckError, fatalError *string) error {
+func UpdateCheckRun(
+	tokenSupplier TokenSupplier,
+	webhook *Webhook,
+	checkRunURL *string,
+	checkErrors *[]checkTypes.CheckError,
+	fatalError *string,
+) error {
 
 	var err error = nil
 	var token string
 
-	token, err = checker.tokenSupplier.GetToken(webhook.Installation.Id)
+	token, err = tokenSupplier.GetToken(webhook.Installation.Id)
 	if err == nil {
 
 		client := &http.Client{}
