@@ -7,7 +7,6 @@ package checks
 
 import (
 	"log"
-	"net/http"
 	"regexp"
 
 	"github.com/galasa-dev/githubapp-copyright/pkg/checkTypes"
@@ -17,7 +16,7 @@ import (
 type Checker interface {
 	CheckFilesChanged(token string, url string) ([]checkTypes.CheckError, error)
 
-	CheckFile(token string, client *http.Client, file *File) *checkTypes.CheckError
+	CheckFile(token string, file *File) *checkTypes.CheckError
 }
 
 type CheckerImpl struct {
@@ -32,14 +31,17 @@ type CheckerImpl struct {
 	// The index is the file extension (including the dot) eg: ".java"
 	// The value is the file checker which will be used.
 	checkersByExtension map[string]fileCheckers.FileChecker
+
+	githubClient GitHubClient
 }
 
-func NewChecker() (Checker, error) {
+func NewChecker(client GitHubClient) (Checker, error) {
 
 	var err error = nil
 
 	checker := new(CheckerImpl)
 
+	checker.githubClient = client
 	checker.javaCommentBlockPattern = regexp.MustCompile(`\s*\/[*]((.|\s)*)[*]\/`)
 
 	// \s means any whitespace character (including \n new lines)
@@ -73,19 +75,17 @@ func NewChecker() (Checker, error) {
 	return checker, err
 }
 
-func (checker *CheckerImpl) CheckFilesChanged(token string, url string) ([]checkTypes.CheckError, error) {
+func (this *CheckerImpl) CheckFilesChanged(token string, url string) ([]checkTypes.CheckError, error) {
 	var allFiles []File
 	var err error = nil
 
-	client := &http.Client{}
-
 	var checkErrors []checkTypes.CheckError = make([]checkTypes.CheckError, 0)
 
-	allFiles, err = GetFilesChanged(client, token, url)
+	allFiles, err = this.githubClient.GetFilesChanged(token, url)
 
 	for _, file := range allFiles {
 		var newCheckError *checkTypes.CheckError
-		newCheckError = checker.CheckFile(token, client, &file)
+		newCheckError = this.CheckFile(token, &file)
 
 		if newCheckError != nil {
 			log.Printf("Found problem with file %v - %v", file.Filename, newCheckError.Message)
@@ -98,7 +98,7 @@ func (checker *CheckerImpl) CheckFilesChanged(token string, url string) ([]check
 
 }
 
-func (checker *CheckerImpl) CheckFile(token string, client *http.Client, file *File) *checkTypes.CheckError {
+func (this *CheckerImpl) CheckFile(token string, file *File) *checkTypes.CheckError {
 
 	var err error = nil
 	var checkError *checkTypes.CheckError
@@ -111,7 +111,7 @@ func (checker *CheckerImpl) CheckFile(token string, client *http.Client, file *F
 	fileExtension := extractFileExtension(file.Filename)
 
 	// Decide which file checker we want to use.
-	fileChecker, isExtensionRecognised := checker.checkersByExtension[fileExtension]
+	fileChecker, isExtensionRecognised := this.checkersByExtension[fileExtension]
 
 	if !isExtensionRecognised {
 		// Don't bother getting the file if we don't know how to check it for copyright.
@@ -119,7 +119,7 @@ func (checker *CheckerImpl) CheckFile(token string, client *http.Client, file *F
 	} else {
 
 		var fileContent string
-		fileContent, err = GetFileContentFromGithub(token, client, file)
+		fileContent, err = this.githubClient.GetFileContentFromGithub(token, file)
 		if err == nil {
 
 			checkError = fileChecker.CheckFileContent(fileContent, file.Filename)

@@ -6,14 +6,9 @@
 package checks
 
 import (
-	"bytes"
 	"crypto/rsa"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"time"
 
@@ -36,13 +31,14 @@ type TokenSupplierImpl struct {
 
 	tokens map[int]githubToken
 
-	tokenHttpClient http.Client
+	githubClient GitHubClient
 }
 
-func NewTokenSupplier(keyFilePath string) (TokenSupplier, error) {
+func NewTokenSupplier(githubClient GitHubClient, keyFilePath string) (TokenSupplier, error) {
 
 	var err error = nil
 	this := new(TokenSupplierImpl)
+	this.githubClient = githubClient
 
 	log.Printf("Using key file %s", keyFilePath)
 
@@ -90,51 +86,25 @@ func (this *TokenSupplierImpl) GetToken(installation int) (string, error) {
 		// We have a valid github jwt token,  now to get the installation token
 		accessUrl := fmt.Sprintf("https://api.github.com/app/installations/%v/access_tokens", installation)
 
-		var req *http.Request
-		req, err = http.NewRequest("POST", accessUrl, nil)
+		var tokenResponse InstallationToken
+		tokenResponse, err = this.githubClient.GetNewToken(accessUrl, tokenString)
+
 		if err == nil {
-
-			req.Header.Add("Authorization", "Bearer "+tokenString)
-			req.Header.Add("Accept", "application/vnd.github.v3+json")
-
-			var resp *http.Response
-			resp, err = this.tokenHttpClient.Do(req)
+			var expiresAt time.Time
+			expiresAt, err = time.Parse(time.RFC3339, tokenResponse.ExpiresAt)
 			if err == nil {
 
-				defer resp.Body.Close()
-				if resp.StatusCode != 201 {
-					err = errors.New(fmt.Sprintf("Error. POST status code is not 201. Code: %v", resp.Status))
-				} else {
+				// take 10 minutes off the expires to make sure we dont get caught at the end of the token life
+				expiresAt = expiresAt.Add(-time.Minute * 10)
 
-					var buf bytes.Buffer
-					_, err = io.Copy(&buf, resp.Body)
-					if err == nil {
-
-						var bodyBytes = buf.Bytes()
-
-						var tokenResponse InstallationToken
-						err = json.Unmarshal(bodyBytes, &tokenResponse)
-						if err == nil {
-
-							var expiresAt time.Time
-							expiresAt, err = time.Parse(time.RFC3339, tokenResponse.ExpiresAt)
-							if err == nil {
-
-								// take 10 minutes off the expires to make sure we dont get caught at the end of the token life
-								expiresAt = expiresAt.Add(-time.Minute * 10)
-
-								newToken := githubToken{
-									token:   tokenResponse.Token,
-									expires: expiresAt,
-								}
-
-								this.tokens[installation] = newToken
-
-								tokenResult = tokenResponse.Token
-							}
-						}
-					}
+				newToken := githubToken{
+					token:   tokenResponse.Token,
+					expires: expiresAt,
 				}
+
+				this.tokens[installation] = newToken
+
+				tokenResult = tokenResponse.Token
 			}
 		}
 	}

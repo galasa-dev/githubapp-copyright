@@ -24,6 +24,7 @@ type EventHandler interface {
 type EventHandlerImpl struct {
 	checker       Checker
 	tokenSupplier TokenSupplier
+	githubClient  GitHubClient
 }
 
 func NewEventHandlerImpl(checker Checker, tokenSupplier TokenSupplier) (EventHandler, error) {
@@ -31,6 +32,7 @@ func NewEventHandlerImpl(checker Checker, tokenSupplier TokenSupplier) (EventHan
 	this := new(EventHandlerImpl)
 	this.checker = checker
 	this.tokenSupplier = tokenSupplier
+	this.githubClient = NewGitHubClient()
 
 	return this, err
 }
@@ -108,7 +110,7 @@ func (this *EventHandlerImpl) performCheckSuite(webhook *Webhook) error {
 		if len(*webhook.CheckSuite.PullRequests) > 0 {
 			// We have pull requests so will use that to obtain a list of files to check
 
-			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, webhook.CheckSuite.HeadSha)
+			checkRunURL, err = this.githubClient.CreateCheckRun(this.tokenSupplier, webhook, webhook.CheckSuite.HeadSha)
 
 			if err == nil {
 				pullRequests := webhook.CheckSuite.PullRequests
@@ -119,7 +121,7 @@ func (this *EventHandlerImpl) performCheckSuite(webhook *Webhook) error {
 				}
 			}
 		} else if webhook.CheckSuite.Before != nil && webhook.CheckSuite.After != nil {
-			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, webhook.CheckSuite.HeadSha)
+			checkRunURL, err = this.githubClient.CreateCheckRun(this.tokenSupplier, webhook, webhook.CheckSuite.HeadSha)
 			if err == nil {
 
 				var checkErrors []checkTypes.CheckError
@@ -152,7 +154,7 @@ func (this *EventHandlerImpl) performCheckRun(webhook *Webhook) error {
 
 		var checkRunURL string
 		if len(*webhook.CheckRun.CheckSuite.PullRequests) > 0 {
-			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, webhook.CheckRun.HeadSha)
+			checkRunURL, err = this.githubClient.CreateCheckRun(this.tokenSupplier, webhook, webhook.CheckRun.HeadSha)
 
 			if err == nil {
 				// We have pull requests so will use that to obtain a list of files to check
@@ -164,7 +166,7 @@ func (this *EventHandlerImpl) performCheckRun(webhook *Webhook) error {
 				}
 			}
 		} else if webhook.CheckRun.CheckSuite.Before != nil && webhook.CheckRun.CheckSuite.After != nil {
-			checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, webhook.CheckRun.HeadSha)
+			checkRunURL, err = this.githubClient.CreateCheckRun(this.tokenSupplier, webhook, webhook.CheckRun.HeadSha)
 			if err == nil {
 				var checkErrors []checkTypes.CheckError
 				checkErrors, err = this.performBeforeAfterChecks(
@@ -206,7 +208,7 @@ func (this *EventHandlerImpl) performPullRequest(webhook *Webhook) error {
 			if err == nil {
 
 				var checkRunURL string
-				checkRunURL, err = CreateCheckRun(this.tokenSupplier, webhook, webhook.PullRequest.Head.Sha)
+				checkRunURL, err = this.githubClient.CreateCheckRun(this.tokenSupplier, webhook, webhook.PullRequest.Head.Sha)
 
 				if err == nil {
 					pullRequests := make([]WebhookPullRequest, 0)
@@ -240,7 +242,7 @@ func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId
 		if err != nil {
 			log.Printf("(%v) Fatal error - %v", checkId, err)
 			fatalError := fmt.Sprintf("Fatal error - %v", err)
-			UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, checkErrors, fatalError)
+			this.githubClient.UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, checkErrors, fatalError)
 		}
 		if newCheckErrors != nil {
 			for _, newError := range newCheckErrors {
@@ -249,7 +251,7 @@ func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId
 		}
 	}
 
-	UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, checkErrors, "")
+	this.githubClient.UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, checkErrors, "")
 
 	return &checkErrors
 }
@@ -273,7 +275,7 @@ func (this *EventHandlerImpl) performBeforeAfterChecks(
 		checkErrors, err = this.checker.CheckFilesChanged(token, filesURL)
 
 		if err == nil {
-			UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, checkErrors, "")
+			this.githubClient.UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, checkErrors, "")
 		}
 	}
 
@@ -283,7 +285,7 @@ func (this *EventHandlerImpl) performBeforeAfterChecks(
 func (this *EventHandlerImpl) setAdhocError(webhook *Webhook, checkId int, checkRunURL string, message string) {
 	log.Printf("(%v) %v", checkId, message)
 
-	UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, nil, message)
+	this.githubClient.UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, nil, message)
 }
 
 func (this *EventHandlerImpl) calculateFilesUrl(webhook *Webhook, checkId int, checkRunURL string, before string, after string) (string, error) {

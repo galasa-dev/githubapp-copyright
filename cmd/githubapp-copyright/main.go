@@ -32,12 +32,14 @@ func main() {
 			parsedValues, err = parser.Parse()
 			if err == nil {
 
+				githubClient := checks.NewGitHubClient()
+
 				var tokenSupplier checks.TokenSupplier
-				tokenSupplier, err = checks.NewTokenSupplier(parsedValues.GithubAuthKeyFilePath)
+				tokenSupplier, err = checks.NewTokenSupplier(githubClient, parsedValues.GithubAuthKeyFilePath)
 				if err == nil {
 
 					var checker checks.Checker
-					checker, err = checks.NewChecker()
+					checker, err = checks.NewChecker(githubClient)
 					if err == nil {
 
 						var eventHandler checks.EventHandler

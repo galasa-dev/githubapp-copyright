@@ -19,17 +19,62 @@ import (
 )
 
 type GitHubClient interface {
+	UpdateCheckRun(
+		tokenSupplier TokenSupplier,
+		webhook *Webhook,
+		checkRunURL string,
+		checkErrors []checkTypes.CheckError,
+		fatalError string,
+	) error
+	GetFilesChanged(token string, baseUrl string) ([]File, error)
+	GetFileContentFromGithub(token string, file *File) (string, error)
+	CreateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, headSha string) (string, error)
+	GetNewToken(accessUrl string, githubAuthToken string) (tokenResponse InstallationToken, err error)
 }
 
 type GitHubClientImpl struct {
+	httpClient *http.Client
 }
 
 func NewGitHubClient() GitHubClient {
-	client := new(GitHubClientImpl)
-	return client
+	this := new(GitHubClientImpl)
+	this.httpClient = &http.Client{}
+	return this
 }
 
-func GetFilesChanged(httpClient *http.Client, token string, baseUrl string) ([]File, error) {
+func (this *GitHubClientImpl) GetNewToken(accessUrl string, githubAuthToken string) (tokenResponse InstallationToken, err error) {
+
+	var req *http.Request
+	req, err = http.NewRequest("POST", accessUrl, nil)
+	if err == nil {
+
+		req.Header.Add("Authorization", "Bearer "+githubAuthToken)
+		req.Header.Add("Accept", "application/vnd.github.v3+json")
+
+		var resp *http.Response
+		resp, err = this.httpClient.Do(req)
+		if err == nil {
+
+			defer resp.Body.Close()
+			if resp.StatusCode != 201 {
+				err = errors.New(fmt.Sprintf("Error. POST status code is not 201. Code: %v", resp.Status))
+			} else {
+
+				var buf bytes.Buffer
+				_, err = io.Copy(&buf, resp.Body)
+				if err == nil {
+
+					var bodyBytes = buf.Bytes()
+
+					err = json.Unmarshal(bodyBytes, &tokenResponse)
+				}
+			}
+		}
+	}
+	return tokenResponse, err
+}
+
+func (this *GitHubClientImpl) GetFilesChanged(token string, baseUrl string) ([]File, error) {
 
 	var err error = nil
 
@@ -40,7 +85,7 @@ func GetFilesChanged(httpClient *http.Client, token string, baseUrl string) ([]F
 	for pageNumber := 1; ; pageNumber++ {
 
 		var pageFiles []File
-		pageFiles, err = getPageOfChangedFileNames(httpClient, token, baseUrl, pageNumber)
+		pageFiles, err = this.getPageOfChangedFileNames(token, baseUrl, pageNumber)
 		if err != nil {
 			// Failed to get the list of files for page xxx
 		} else {
@@ -55,8 +100,7 @@ func GetFilesChanged(httpClient *http.Client, token string, baseUrl string) ([]F
 	return allFiles, err
 }
 
-func getPageOfChangedFileNames(
-	httpClient *http.Client,
+func (this *GitHubClientImpl) getPageOfChangedFileNames(
 	token string,
 	baseUrl string,
 	page int,
@@ -74,7 +118,7 @@ func getPageOfChangedFileNames(
 		req.Header.Add("Accept", "application/vnd.github.v3+json")
 
 		var resp *http.Response
-		resp, err = httpClient.Do(req)
+		resp, err = this.httpClient.Do(req)
 		if err == nil {
 
 			defer resp.Body.Close()
@@ -101,18 +145,18 @@ func getPageOfChangedFileNames(
 	return files, err
 }
 
-func GetFileContentFromGithub(token string, client *http.Client, file *File) (string, error) {
+func (this *GitHubClientImpl) GetFileContentFromGithub(token string, file *File) (string, error) {
 	log.Printf("(%v) Checking file - %v\n", file.Filename, file.Sha)
 	var content string
 	var err error = nil
-	content, err = getFileContent(token, client, &file.ContentsURL)
+	content, err = this.getFileContent(token, &file.ContentsURL)
 	if err != nil {
 		err = errors.New(fmt.Sprintf("Failed to access the content of the file for checking - %v", err))
 	}
 	return content, err
 }
 
-func getFileContent(token string, client *http.Client, contentURL *string) (string, error) {
+func (this *GitHubClientImpl) getFileContent(token string, contentURL *string) (string, error) {
 	contents := ""
 
 	var err error = nil
@@ -123,7 +167,7 @@ func getFileContent(token string, client *http.Client, contentURL *string) (stri
 		req.Header.Add("Authorization", "Bearer "+token)
 		req.Header.Add("Accept", "application/vnd.github.v3.raw")
 		var resp *http.Response
-		resp, err = client.Do(req)
+		resp, err = this.httpClient.Do(req)
 		if err == nil {
 
 			defer resp.Body.Close()
@@ -145,7 +189,7 @@ func getFileContent(token string, client *http.Client, contentURL *string) (stri
 }
 
 // Create a 'check run' on github.
-func CreateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, headSha string) (string, error) {
+func (this *GitHubClientImpl) CreateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, headSha string) (string, error) {
 
 	var url string = ""
 
@@ -155,8 +199,6 @@ func CreateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, headSha strin
 	var token string
 	token, err = tokenSupplier.GetToken(installationId)
 	if err == nil {
-
-		client := &http.Client{}
 
 		checkRun := CheckRun{
 			Name:    "copyright",
@@ -182,7 +224,7 @@ func CreateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, headSha strin
 				req.Header.Add("Content-Type", "application/vnd.github.v3+json")
 
 				var resp *http.Response
-				resp, err = client.Do(req)
+				resp, err = this.httpClient.Do(req)
 				if err == nil {
 
 					defer resp.Body.Close()
@@ -212,7 +254,7 @@ func CreateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, headSha strin
 }
 
 // Update the status of a previously-created 'check run' which exists at the end of a URL in github.
-func UpdateCheckRun(
+func (this *GitHubClientImpl) UpdateCheckRun(
 	tokenSupplier TokenSupplier,
 	webhook *Webhook,
 	checkRunURL string,
@@ -225,8 +267,6 @@ func UpdateCheckRun(
 
 	token, err = tokenSupplier.GetToken(webhook.Installation.Id)
 	if err == nil {
-
-		client := &http.Client{}
 
 		checkRun := CheckRun{
 			Name:   "copyright",
@@ -274,7 +314,7 @@ func UpdateCheckRun(
 				req.Header.Add("Content-Type", "application/vnd.github.v3+json")
 
 				var resp *http.Response
-				resp, err = client.Do(req)
+				resp, err = this.httpClient.Do(req)
 				if err == nil {
 
 					defer resp.Body.Close()
