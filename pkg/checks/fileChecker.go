@@ -15,16 +15,12 @@ import (
 )
 
 type Checker interface {
-	CheckPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) ([]checkTypes.CheckError, error)
-
-	CheckFilesChanged(token string, checkId int, url string) ([]checkTypes.CheckError, error)
+	CheckFilesChanged(token string, url string) ([]checkTypes.CheckError, error)
 
 	CheckFile(token string, client *http.Client, file *File) *checkTypes.CheckError
 }
 
 type CheckerImpl struct {
-	tokenSupplier TokenSupplier
-
 	javaCommentBlockPattern *regexp.Regexp
 
 	//licencePattern   *regexp.Regexp
@@ -38,13 +34,11 @@ type CheckerImpl struct {
 	checkersByExtension map[string]fileCheckers.FileChecker
 }
 
-func NewChecker(tokenSupplier TokenSupplier) (Checker, error) {
+func NewChecker() (Checker, error) {
 
 	var err error = nil
 
 	checker := new(CheckerImpl)
-
-	checker.tokenSupplier = tokenSupplier
 
 	checker.javaCommentBlockPattern = regexp.MustCompile(`\s*\/[*]((.|\s)*)[*]\/`)
 
@@ -79,32 +73,7 @@ func NewChecker(tokenSupplier TokenSupplier) (Checker, error) {
 	return checker, err
 }
 
-func (checker *CheckerImpl) CheckPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) ([]checkTypes.CheckError, error) {
-	log.Printf("(%v) Checking pullrequest '%v'", checkId, pullRequestUrl)
-
-	var err error = nil
-	installationId := webhook.Installation.Id
-
-	var checkErrors []checkTypes.CheckError = nil
-
-	var token string
-	token, err = checker.tokenSupplier.GetToken(installationId)
-
-	if err != nil {
-
-		checkErrors, err = checker.CheckFilesChanged(token, checkId, pullRequestUrl)
-
-		if err == nil {
-			if len(checkErrors) < 1 {
-				return nil, nil
-			}
-		}
-	}
-
-	return checkErrors, err
-}
-
-func (checker *CheckerImpl) CheckFilesChanged(token string, checkId int, url string) ([]checkTypes.CheckError, error) {
+func (checker *CheckerImpl) CheckFilesChanged(token string, url string) ([]checkTypes.CheckError, error) {
 	var allFiles []File
 	var err error = nil
 
@@ -112,14 +81,14 @@ func (checker *CheckerImpl) CheckFilesChanged(token string, checkId int, url str
 
 	var checkErrors []checkTypes.CheckError = make([]checkTypes.CheckError, 0)
 
-	allFiles, err = getFilesChanged(client, token, url)
+	allFiles, err = GetFilesChanged(client, token, url)
 
 	for _, file := range allFiles {
 		var newCheckError *checkTypes.CheckError
 		newCheckError = checker.CheckFile(token, client, &file)
 
 		if newCheckError != nil {
-			log.Printf("(%v) Found problem with file %v - %v", checkId, file.Filename, newCheckError.Message)
+			log.Printf("Found problem with file %v - %v", file.Filename, newCheckError.Message)
 			checkErrors = append(checkErrors, *newCheckError)
 		}
 
@@ -150,7 +119,7 @@ func (checker *CheckerImpl) CheckFile(token string, client *http.Client, file *F
 	} else {
 
 		var fileContent string
-		fileContent, err = getFileContentFromGithub(token, client, file)
+		fileContent, err = GetFileContentFromGithub(token, client, file)
 		if err == nil {
 
 			checkError = fileChecker.CheckFileContent(fileContent, file.Filename)

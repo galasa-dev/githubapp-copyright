@@ -18,7 +18,18 @@ import (
 	"github.com/galasa-dev/githubapp-copyright/pkg/checkTypes"
 )
 
-func getFilesChanged(httpClient *http.Client, token string, baseUrl string) ([]File, error) {
+type GitHubClient interface {
+}
+
+type GitHubClientImpl struct {
+}
+
+func NewGitHubClient() GitHubClient {
+	client := new(GitHubClientImpl)
+	return client
+}
+
+func GetFilesChanged(httpClient *http.Client, token string, baseUrl string) ([]File, error) {
 
 	var err error = nil
 
@@ -90,7 +101,7 @@ func getPageOfChangedFileNames(
 	return files, err
 }
 
-func getFileContentFromGithub(token string, client *http.Client, file *File) (string, error) {
+func GetFileContentFromGithub(token string, client *http.Client, file *File) (string, error) {
 	log.Printf("(%v) Checking file - %v\n", file.Filename, file.Sha)
 	var content string
 	var err error = nil

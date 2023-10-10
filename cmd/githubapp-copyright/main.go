@@ -37,7 +37,7 @@ func main() {
 				if err == nil {
 
 					var checker checks.Checker
-					checker, err = checks.NewChecker(tokenSupplier)
+					checker, err = checks.NewChecker()
 					if err == nil {
 
 						var eventHandler checks.EventHandler

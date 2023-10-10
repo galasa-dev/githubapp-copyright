@@ -31,13 +31,32 @@ func NewEventHandlerImpl(checker Checker, tokenSupplier TokenSupplier) (EventHan
 	this := new(EventHandlerImpl)
 	this.checker = checker
 	this.tokenSupplier = tokenSupplier
+
 	return this, err
 }
 
 func (this *EventHandlerImpl) HandleEvent(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("Inbound event")
-	var status int = http.StatusOK
+
+	status, webhook := extractWebHook(r)
+
+	log.Printf("    Received action %v\n", webhook.Action)
+
+	if webhook.CheckSuite != nil {
+		go this.performCheckSuite(&webhook)
+	} else if webhook.CheckRun != nil {
+		go this.performCheckRun(&webhook)
+	} else if webhook.Action == "opened" || webhook.Action == "synchronize" {
+		go this.performPullRequest(&webhook)
+	}
+
+	w.WriteHeader(status)
+}
+
+func extractWebHook(r *http.Request) (status int, webhook Webhook) {
+
+	status = http.StatusOK
 
 	expectedUrlPath := "/githubapp/copyright/event_handler"
 	if r.URL.Path != expectedUrlPath {
@@ -64,30 +83,16 @@ func (this *EventHandlerImpl) HandleEvent(w http.ResponseWriter, r *http.Request
 					status = http.StatusInternalServerError
 				} else {
 
-					var webhook Webhook
 					err = json.Unmarshal(jsonBytes, &webhook)
 					if err != nil {
 						log.Printf("Parse webhook failed - %v\n", err)
 						status = http.StatusInternalServerError
-					} else {
-
-						log.Printf("    Received action %v\n", webhook.Action)
-
-						if webhook.CheckSuite != nil {
-							go this.performCheckSuite(&webhook)
-						} else if webhook.CheckRun != nil {
-							go this.performCheckRun(&webhook)
-						} else if webhook.Action == "opened" || webhook.Action == "synchronize" {
-							go this.performPullRequest(&webhook)
-						}
 					}
 				}
 			}
-
 		}
 	}
-
-	w.WriteHeader(status)
+	return status, webhook
 }
 
 func (this *EventHandlerImpl) performCheckSuite(webhook *Webhook) error {
@@ -231,7 +236,7 @@ func (this *EventHandlerImpl) performPullRequestChecks(webhook *Webhook, checkId
 	for _, pr := range *pullRequests {
 		var err error
 		var newCheckErrors []checkTypes.CheckError
-		newCheckErrors, err = this.checker.CheckPullRequest(webhook, checkId, pr.Url)
+		newCheckErrors, err = this.checkPullRequest(webhook, checkId, pr.Url)
 		if err != nil {
 			log.Printf("(%v) Fatal error - %v", checkId, err)
 			fatalError := fmt.Sprintf("Fatal error - %v", err)
@@ -265,7 +270,7 @@ func (this *EventHandlerImpl) performBeforeAfterChecks(
 		var filesURL string
 		filesURL, err = this.calculateFilesUrl(webhook, checkId, checkRunURL, before, after)
 
-		checkErrors, err = this.checker.CheckFilesChanged(token, checkId, filesURL)
+		checkErrors, err = this.checker.CheckFilesChanged(token, filesURL)
 
 		if err == nil {
 			UpdateCheckRun(this.tokenSupplier, webhook, checkRunURL, checkErrors, "")
@@ -303,4 +308,29 @@ func (this *EventHandlerImpl) calculateFilesUrl(webhook *Webhook, checkId int, c
 		}
 	}
 	return filesURL, err
+}
+
+func (this *EventHandlerImpl) checkPullRequest(webhook *Webhook, checkId int, pullRequestUrl string) ([]checkTypes.CheckError, error) {
+	log.Printf("(%v) Checking pullrequest '%v'", checkId, pullRequestUrl)
+
+	var err error = nil
+	installationId := webhook.Installation.Id
+
+	var checkErrors []checkTypes.CheckError = nil
+
+	var token string
+	token, err = this.tokenSupplier.GetToken(installationId)
+
+	if err != nil {
+
+		checkErrors, err = this.checker.CheckFilesChanged(token, pullRequestUrl)
+
+		if err == nil {
+			if len(checkErrors) < 1 {
+				return nil, nil
+			}
+		}
+	}
+
+	return checkErrors, err
 }
