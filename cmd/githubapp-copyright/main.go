@@ -32,18 +32,18 @@ func main() {
 			parsedValues, err = parser.Parse()
 			if err == nil {
 
-				githubClient := checks.NewGitHubClient()
+				gitHubClient := checks.NewGitHubClient(parsedValues.IsDebugEnabled)
 
 				var tokenSupplier checks.TokenSupplier
-				tokenSupplier, err = checks.NewTokenSupplier(githubClient, parsedValues.GithubAuthKeyFilePath)
+				tokenSupplier, err = checks.NewTokenSupplier(gitHubClient, parsedValues.GithubAuthKeyFilePath)
 				if err == nil {
 
 					var checker checks.Checker
-					checker, err = checks.NewChecker(githubClient)
+					checker, err = checks.NewChecker(gitHubClient)
 					if err == nil {
 
 						var eventHandler checks.EventHandler
-						eventHandler, err = checks.NewEventHandlerImpl(checker, tokenSupplier)
+						eventHandler, err = checks.NewEventHandlerImpl(gitHubClient, checker, tokenSupplier)
 						if err == nil {
 
 							http.HandleFunc("/githubapp/copyright/event_handler", eventHandler.HandleEvent)

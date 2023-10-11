@@ -7,7 +7,7 @@ This code builds a docker image, which can be deployed to kubernetes.
 The program `copyright` or `copyright-amd64` is invoked with this syntax:
 
 ```
-copyright --githubAuthKeyFile <key-file-path>
+copyright --githubAuthKeyFile <key-file-path> [--debug]
 ```
 
 Parameters:
@@ -19,6 +19,8 @@ For example `copyright --githubAuthKeyFile /my/folder/key.pem`
 
 That lets the copyright application authenticate with github, so it can do things like ask for the file content
 of a file which is mentioned in a pull request.
+
+--debug : An optoinal flag. If used, then HTTP traffic is logged in the log output. Useful for capturing real packets for unit tests.
 
 ## Deploying
 

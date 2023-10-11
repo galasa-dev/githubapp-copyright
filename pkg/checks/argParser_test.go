@@ -74,3 +74,26 @@ func TestUnknownParamGivesError(t *testing.T) {
 	assert.True(t, console.contains("Error: Unrecognised parameter 'garbage'"))
 	assert.Equal(t, "myFilePath", values.GithubAuthKeyFilePath)
 }
+
+func TestDebugFlagPresentParsesAsDebugEnabled(t *testing.T) {
+	args := []string{"copyright", "--githubAuthKeyFile", "myFilePath", "--debug"}
+
+	console := NewConsoleMock()
+	parser, err := NewCommandLineArgParserImpl(args, console)
+	values, err := parser.Parse()
+	assert.Nil(t, err)
+	assert.NotNil(t, values)
+	assert.Equal(t, "myFilePath", values.GithubAuthKeyFilePath)
+	assert.Equal(t, true, values.IsDebugEnabled)
+}
+
+func TestDebugFlagMissingParsesAsDebugFalse(t *testing.T) {
+	args := []string{"copyright", "--githubAuthKeyFile", "myFilePath"}
+
+	console := NewConsoleMock()
+	parser, err := NewCommandLineArgParserImpl(args, console)
+	values, err := parser.Parse()
+	assert.Nil(t, err)
+	assert.NotNil(t, values)
+	assert.Equal(t, false, values.IsDebugEnabled)
+}

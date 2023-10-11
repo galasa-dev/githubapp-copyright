@@ -32,7 +32,7 @@ type CheckerImpl struct {
 	// The value is the file checker which will be used.
 	checkersByExtension map[string]fileCheckers.FileChecker
 
-	githubClient GitHubClient
+	gitHubClient GitHubClient
 }
 
 func NewChecker(client GitHubClient) (Checker, error) {
@@ -41,7 +41,7 @@ func NewChecker(client GitHubClient) (Checker, error) {
 
 	checker := new(CheckerImpl)
 
-	checker.githubClient = client
+	checker.gitHubClient = client
 	checker.javaCommentBlockPattern = regexp.MustCompile(`\s*\/[*]((.|\s)*)[*]\/`)
 
 	// \s means any whitespace character (including \n new lines)
@@ -81,7 +81,7 @@ func (this *CheckerImpl) CheckFilesChanged(token string, url string) ([]checkTyp
 
 	var checkErrors []checkTypes.CheckError = make([]checkTypes.CheckError, 0)
 
-	allFiles, err = this.githubClient.GetFilesChanged(token, url)
+	allFiles, err = this.gitHubClient.GetFilesChanged(token, url)
 
 	for _, file := range allFiles {
 		var newCheckError *checkTypes.CheckError
@@ -119,7 +119,7 @@ func (this *CheckerImpl) CheckFile(token string, file *File) *checkTypes.CheckEr
 	} else {
 
 		var fileContent string
-		fileContent, err = this.githubClient.GetFileContentFromGithub(token, file)
+		fileContent, err = this.gitHubClient.GetFileContentFromGithub(token, file)
 		if err == nil {
 
 			checkError = fileChecker.CheckFileContent(fileContent, file.Filename)

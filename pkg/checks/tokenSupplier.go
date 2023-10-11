@@ -31,14 +31,14 @@ type TokenSupplierImpl struct {
 
 	tokens map[int]githubToken
 
-	githubClient GitHubClient
+	gitHubClient GitHubClient
 }
 
-func NewTokenSupplier(githubClient GitHubClient, keyFilePath string) (TokenSupplier, error) {
+func NewTokenSupplier(gitHubClient GitHubClient, keyFilePath string) (TokenSupplier, error) {
 
 	var err error = nil
 	this := new(TokenSupplierImpl)
-	this.githubClient = githubClient
+	this.gitHubClient = gitHubClient
 
 	log.Printf("Using key file %s", keyFilePath)
 
@@ -87,7 +87,7 @@ func (this *TokenSupplierImpl) GetToken(installation int) (string, error) {
 		accessUrl := fmt.Sprintf("https://api.github.com/app/installations/%v/access_tokens", installation)
 
 		var tokenResponse InstallationToken
-		tokenResponse, err = this.githubClient.GetNewToken(accessUrl, tokenString)
+		tokenResponse, err = this.gitHubClient.GetNewToken(accessUrl, tokenString)
 
 		if err == nil {
 			var expiresAt time.Time

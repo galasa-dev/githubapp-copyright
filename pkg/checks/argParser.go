@@ -12,6 +12,7 @@ import (
 
 type FieldValuesParsed struct {
 	GithubAuthKeyFilePath string
+	IsDebugEnabled        bool
 }
 
 type CommandLineArgParser interface {
@@ -25,6 +26,7 @@ type CommandLineArgParserImpl struct {
 
 const (
 	COMMAND_FLAG_GITHUB_AUTH_KEY_FILE = "--githubAuthKeyFile"
+	COMMAND_FLAG_DEBUG                = "--debug"
 )
 
 func NewCommandLineArgParserImpl(args []string, console Console) (CommandLineArgParser, error) {
@@ -64,6 +66,11 @@ func (this *CommandLineArgParserImpl) Parse() (*FieldValuesParsed, error) {
 				} else {
 					results.GithubAuthKeyFilePath = arg
 				}
+			}
+
+		case COMMAND_FLAG_DEBUG:
+			{
+				results.IsDebugEnabled = true
 			}
 
 		default:

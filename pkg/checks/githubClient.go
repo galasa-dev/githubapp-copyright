@@ -19,27 +19,30 @@ import (
 )
 
 type GitHubClient interface {
-	UpdateCheckRun(
-		tokenSupplier TokenSupplier,
-		webhook *Webhook,
-		checkRunURL string,
-		checkErrors []checkTypes.CheckError,
-		fatalError string,
-	) error
+	UpdateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, checkRunURL string, checkErrors []checkTypes.CheckError, fatalError string) error
 	GetFilesChanged(token string, baseUrl string) ([]File, error)
 	GetFileContentFromGithub(token string, file *File) (string, error)
 	CreateCheckRun(tokenSupplier TokenSupplier, webhook *Webhook, headSha string) (string, error)
 	GetNewToken(accessUrl string, githubAuthToken string) (tokenResponse InstallationToken, err error)
+	LogHttpPayload(jsonBytes []byte)
 }
 
 type GitHubClientImpl struct {
-	httpClient *http.Client
+	httpClient          *http.Client
+	isHttpTrafficLogged bool
 }
 
-func NewGitHubClient() GitHubClient {
+func NewGitHubClient(isHttpTrafficLogged bool) GitHubClient {
 	this := new(GitHubClientImpl)
 	this.httpClient = &http.Client{}
+	this.isHttpTrafficLogged = isHttpTrafficLogged
 	return this
+}
+
+func (this *GitHubClientImpl) LogHttpPayload(jsonBytes []byte) {
+	if this.isHttpTrafficLogged {
+		log.Printf("http payload:\n%s\n", string(jsonBytes))
+	}
 }
 
 func (this *GitHubClientImpl) GetNewToken(accessUrl string, githubAuthToken string) (tokenResponse InstallationToken, err error) {
@@ -50,6 +53,8 @@ func (this *GitHubClientImpl) GetNewToken(accessUrl string, githubAuthToken stri
 
 		req.Header.Add("Authorization", "Bearer "+githubAuthToken)
 		req.Header.Add("Accept", "application/vnd.github.v3+json")
+
+		log.Printf("Sending HTTP POST to %s", accessUrl)
 
 		var resp *http.Response
 		resp, err = this.httpClient.Do(req)
@@ -117,6 +122,8 @@ func (this *GitHubClientImpl) getPageOfChangedFileNames(
 		req.Header.Add("Authorization", "Bearer "+token)
 		req.Header.Add("Accept", "application/vnd.github.v3+json")
 
+		log.Printf("Sending HTTP GET to %s", filesUrl)
+
 		var resp *http.Response
 		resp, err = this.httpClient.Do(req)
 		if err == nil {
@@ -137,6 +144,9 @@ func (this *GitHubClientImpl) getPageOfChangedFileNames(
 			var bodyBytes []byte
 			bodyBytes, err = io.ReadAll(resp.Body)
 			if err == nil {
+
+				this.LogHttpPayload(bodyBytes)
+
 				err = json.Unmarshal(bodyBytes, &files)
 			}
 		}
@@ -149,24 +159,27 @@ func (this *GitHubClientImpl) GetFileContentFromGithub(token string, file *File)
 	log.Printf("(%v) Checking file - %v\n", file.Filename, file.Sha)
 	var content string
 	var err error = nil
-	content, err = this.getFileContent(token, &file.ContentsURL)
+	content, err = this.getFileContent(token, file.ContentsURL)
 	if err != nil {
 		err = errors.New(fmt.Sprintf("Failed to access the content of the file for checking - %v", err))
 	}
 	return content, err
 }
 
-func (this *GitHubClientImpl) getFileContent(token string, contentURL *string) (string, error) {
+func (this *GitHubClientImpl) getFileContent(token string, contentURL string) (string, error) {
 	contents := ""
 
 	var err error = nil
 	var req *http.Request
-	req, err = http.NewRequest("GET", *contentURL, nil)
+	req, err = http.NewRequest("GET", contentURL, nil)
 	if err == nil {
 
 		req.Header.Add("Authorization", "Bearer "+token)
 		req.Header.Add("Accept", "application/vnd.github.v3.raw")
 		var resp *http.Response
+
+		log.Printf("Sending HTTP GET to %", contentURL)
+
 		resp, err = this.httpClient.Do(req)
 		if err == nil {
 
@@ -178,6 +191,8 @@ func (this *GitHubClientImpl) getFileContent(token string, contentURL *string) (
 				var bodyBytes []byte
 				bodyBytes, err = io.ReadAll(resp.Body)
 				if err == nil {
+
+					this.LogHttpPayload(bodyBytes)
 
 					contents = string(bodyBytes)
 				}
@@ -216,12 +231,15 @@ func (this *GitHubClientImpl) CreateCheckRun(tokenSupplier TokenSupplier, webhoo
 
 			// Post a status back to github.
 			var req *http.Request
-			req, err = http.NewRequest("POST", webhook.Repository.RepositoryURL+"/check-runs", bytes.NewReader(checkRunBytes))
+			checkRunsUrl := webhook.Repository.RepositoryURL + "/check-runs"
+			req, err = http.NewRequest("POST", checkRunsUrl, bytes.NewReader(checkRunBytes))
 			if err == nil {
 
 				req.Header.Add("Authorization", "Bearer "+token)
 				req.Header.Add("Accept", "application/vnd.github.v3+json")
 				req.Header.Add("Content-Type", "application/vnd.github.v3+json")
+
+				log.Printf("Sending HTTP POST to %s", checkRunsUrl)
 
 				var resp *http.Response
 				resp, err = this.httpClient.Do(req)
@@ -235,6 +253,8 @@ func (this *GitHubClientImpl) CreateCheckRun(tokenSupplier TokenSupplier, webhoo
 						var bodyBytes []byte
 						bodyBytes, err = io.ReadAll(resp.Body)
 						if err == nil {
+
+							this.LogHttpPayload(bodyBytes)
 
 							var response CheckRun
 
@@ -314,6 +334,7 @@ func (this *GitHubClientImpl) UpdateCheckRun(
 				req.Header.Add("Content-Type", "application/vnd.github.v3+json")
 
 				var resp *http.Response
+				log.Printf("Sending HTTP PATCH to %s", checkRunURL)
 				resp, err = this.httpClient.Do(req)
 				if err == nil {
 
@@ -328,6 +349,8 @@ func (this *GitHubClientImpl) UpdateCheckRun(
 						if resp.StatusCode != 200 {
 							log.Printf("Fatal error - %v\n", data)
 							err = errors.New(fmt.Sprintf("Non-200 status returned from github. %d", resp.StatusCode))
+						} else {
+							this.LogHttpPayload(bodyBytes)
 						}
 					}
 				}
