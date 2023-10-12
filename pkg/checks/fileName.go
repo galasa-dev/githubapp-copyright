@@ -13,9 +13,7 @@ func extractFileExtension(fileName string) string {
 	fileExtension := ""
 
 	indexOfLastDot := strings.LastIndex(fileName, ".")
-	if indexOfLastDot < 0 {
-		// There is no file extension.
-	} else {
+	if indexOfLastDot >= 0 {
 		fileExtension = fileName[indexOfLastDot:]
 	}
 

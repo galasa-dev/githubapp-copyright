@@ -92,7 +92,7 @@ func (this *GitHubClientImpl) GetFilesChanged(token string, baseUrl string) ([]F
 		var pageFiles []File
 		pageFiles, err = this.getPageOfChangedFileNames(token, baseUrl, pageNumber)
 		if err != nil {
-			// Failed to get the list of files for page xxx
+			log.Printf("Page %d of file changes not obtained. %s", pageNumber, err.Error())
 		} else {
 			// Build the super-list of all files for this change
 			allFiles = append(allFiles, pageFiles...)

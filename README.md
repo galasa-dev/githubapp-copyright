@@ -48,7 +48,7 @@ For example `copyright --githubAuthKeyFile /my/folder/key.pem`
 That lets the copyright application authenticate with github, so it can do things like ask for the file content
 of a file which is mentioned in a pull request.
 
---debug : An optoinal flag. If used, then HTTP traffic is logged in the log output. Useful for capturing real packets for unit tests.
+--debug : An optional flag. If used, then HTTP traffic is logged in the log output. Useful for capturing real packets for unit tests.
 
 ## Deploying
 
