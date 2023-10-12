@@ -73,5 +73,4 @@ func logBuildInfo() {
 	log.Printf("Version %s\n", embedded.GetVersion())
 	log.Printf("%s\n", embedded.GetCopyright())
 	log.Printf("Build date: %s\n", embedded.GetBuildDate())
-	log.Printf("Latest git sha: %s\n", embedded.GetLatestGitCommitSha())
 }

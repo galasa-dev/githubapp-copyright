@@ -12,14 +12,10 @@ source-code : \
 	./pkg/checkTypes \
 	./pkg/fileCheckers \
 	./pkg/embedded \
-	./pkg/embedded/resources/build-date.txt \
-	./pkg/embedded/resources/git-commit-sha.txt
-
+	./pkg/embedded/resources/build-date.txt 
+	
 ./pkg/embedded/resources/build-date.txt :
 	echo -n "Build date: $(date)" > ./pkg/embedded/resources/build-date.txt
-
-./pkg/embedded/resources/git-commit-sha.txt :
-	git commit | head -1 | xrgs > ./pkg/embedded/resources/git-commit-sha.txt
 
 bin/copyright : source-code
 	CGO_ENABLED=0 go build -o bin/copyright ./cmd/githubapp-copyright
