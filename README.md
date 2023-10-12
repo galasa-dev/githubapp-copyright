@@ -52,3 +52,9 @@ of a file which is mentioned in a pull request.
 
 The key.pem file should be supplied to any deployment as a secret.
 
+## License
+See [license file](./LICENSE)
+
+## Contributing
+See [contributing guidelines](./CONTRIBUTIONS.md)
+
