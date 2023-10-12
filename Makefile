@@ -4,7 +4,6 @@
 # SPDX-License-Identifier: EPL-2.0
 #
 
-
 all: tests bin/copyright bin/copyright-amd64
 
 source-code : ./cmd/githubapp-copyright/*.go ./pkg/checks/*.go
@@ -19,14 +18,7 @@ tests: build/coverage.txt build/coverage.html
 
 build/coverage.out : source-code
 	mkdir -p build
-	# Compile the tests into a binary executable "checks.test"
-	go test -c -v -cover  -coverpkg ./pkg/checks ./pkg/...
-	# Keep it tidy by moving it out the way so it never gets checked-in.
-	mv checks.test build
-	# Each line in the makefile executes with a different environment.
-	# So cd'ing to a folder has no effect unless you do something immediately on the
-	# same line... 
-	cd build ; ./checks.test -test.coverprofile coverage.out
+	go test -v -cover -coverprofile=build/coverage.out  -coverpkg ./pkg/checks,./pkg/checkTypes,./pkg/fileCheckers ./pkg/...
 
 build/coverage.html : build/coverage.out
 	go tool cover -html=build/coverage.out -o build/coverage.html

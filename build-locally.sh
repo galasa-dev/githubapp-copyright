@@ -84,58 +84,7 @@ while [ "$1" != "" ]; do
     shift
 done
 
-#--------------------------------------------------------------------------
-function install_openssl_macOS {
-    h2 "Installing the openssl tool into our mac..."
-    brew update
-    rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to update brew. rc=${rc}" ; exit 1 ; fi
 
-    brew install openssl
-    rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to brew install openssl. rc=${rc}" ; exit 1 ; fi
-
-    echo 'export PATH="/usr/local/opt/openssl/bin:$PATH"' >> ~/.bash_profile
-    source ~/.bash_profile
-    info "Added openssl to the path"
-
-    success "OK"
-}
-
-#--------------------------------------------------------------------------
-function install_openssl {
-    h2 "Making sure openssl is installed..."
-
-    which openssl
-    rc=$? 
-    if [[ "${rc}" != "0" ]]; then 
-        operating_system=$(uname -o)
-        if [[ "${operating_system}" == "Darwin" ]]; then
-            install_openssl_macOS
-        else
-            error "Script not able to install openssl for you. Enhance the script or install it manually and add to your PATH."
-            exit 1
-        fi
-    fi
-    
-    success "OK"
-}
-
-#--------------------------------------------------------------------------
-function generate_rsa_key_in_pem_file {
-    h2 "Generating the RSA key within a key.pem file..."
-
-    mkdir -p ${BASEDIR}/build
-    pushd ${BASEDIR}/build
-
-    openssl genrsa -out rsa.private 1024
-    rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to generate an RSA key. rc=${rc}" ; exit 1 ; fi
-
-    openssl rsa -in rsa.private -out key.pem 
-    rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to convert the rsa private key into pem format. rc=${rc}" ; exit 1 ; fi
-
-    popd
-
-    success "OK"
-}
 
 function clean {
     h2 "Cleaning the binaries out..."
@@ -158,6 +107,7 @@ function build_executables {
     h2 "Building new binaries..."
     set -o pipefail # Fail everything if anything in the pipeline fails. Else we are just checking the 'tee' return code.
     mkdir -p ${BASEDIR}/build
+    export GITHUB_AUTH_KEY=${BASEDIR}/build/key.pem
     make all | tee ${BASEDIR}/build/compile-log.txt
     rc=$? ; if [[ "${rc}" != "0" ]]; then error "Failed to build binary executable copyright checker programs. rc=${rc}. See log at ${BASEDIR}/build/compile-log.txt" ; exit 1 ; fi
     success "New binaries built - OK"
@@ -177,9 +127,7 @@ function build_container_image {
 #--------------------------------------------------------------------------
 h1 "Building the copyright checker tool"
 
-install_openssl
 clean
-generate_rsa_key_in_pem_file
 build_executables
 build_container_image
 
