@@ -13,6 +13,9 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Create date of build file
+      run: date > pkg/embedded/resources/build-date.txt
+
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
