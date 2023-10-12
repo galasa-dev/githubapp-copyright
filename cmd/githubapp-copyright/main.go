@@ -18,7 +18,8 @@ import (
 
 func main() {
 
-	log.Printf("Copyright Checker version %s\n", embedded.GetVersion())
+	logBuildInfo()
+
 	log.Println("Starting Galasa copyright checks...")
 
 	var err error = nil
@@ -65,4 +66,12 @@ func main() {
 	}
 
 	os.Exit(0)
+}
+
+func logBuildInfo() {
+	log.Printf("Copyright Checker\n")
+	log.Printf("Version %s\n", embedded.GetVersion())
+	log.Printf("%s\n", embedded.GetCopyright())
+	log.Printf("Build date: %s\n", embedded.GetBuildDate())
+	log.Printf("Latest git sha: %s\n", embedded.GetLatestGitCommitSha())
 }
