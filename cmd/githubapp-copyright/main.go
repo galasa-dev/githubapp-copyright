@@ -13,10 +13,13 @@ import (
 	"os"
 
 	"github.com/galasa-dev/githubapp-copyright/pkg/checks"
+	embedded "github.com/galasa-dev/githubapp-copyright/pkg/embedded"
 )
 
 func main() {
-	log.Println("Starting Galasa copyright checks")
+
+	log.Printf("Copyright Checker version %s\n", embedded.GetVersion())
+	log.Println("Starting Galasa copyright checks...")
 
 	var err error = nil
 
@@ -47,7 +50,8 @@ func main() {
 						if err == nil {
 
 							http.HandleFunc("/githubapp/copyright/event_handler", eventHandler.HandleEvent)
-							log.Println(http.ListenAndServe(":3000", nil))
+							log.Printf("Listening for http traffic on port 3000...\n")
+							err = http.ListenAndServe(":3000", nil)
 						}
 					}
 				}

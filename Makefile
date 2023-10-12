@@ -6,7 +6,12 @@
 
 all: tests bin/copyright bin/copyright-amd64
 
-source-code : ./cmd/githubapp-copyright/*.go ./pkg/checks/*.go
+source-code : \
+	./cmd/githubapp-copyright/*.go \
+	./pkg/checks/*.go \
+	./pkg/checkTypes \
+	./pkg/fileCheckers \
+	./pkg/embedded
 
 bin/copyright : source-code
 	CGO_ENABLED=0 go build -o bin/copyright ./cmd/githubapp-copyright

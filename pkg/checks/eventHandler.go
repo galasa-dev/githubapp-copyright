@@ -39,7 +39,7 @@ func NewEventHandlerImpl(gitHubClient GitHubClient, checker Checker, tokenSuppli
 
 func (this *EventHandlerImpl) HandleEvent(w http.ResponseWriter, r *http.Request) {
 
-	log.Println("Inbound event")
+	log.Printf("Inbound event %v\n", *r)
 
 	status, webhook := this.extractWebHook(r)
 
