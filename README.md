@@ -5,8 +5,6 @@ Objective: Checks that valid copyright statements are present in code, checking 
 # Checks performed
 
 There are two main classes of things checked:
-- java-like files
-- yaml-like files
 
 For `.java`, `.go`, `.ts`, `.tsx`, and `.js` files, we expect this:
 ```
