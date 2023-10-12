@@ -178,7 +178,7 @@ func (this *GitHubClientImpl) getFileContent(token string, contentURL string) (s
 		req.Header.Add("Accept", "application/vnd.github.v3.raw")
 		var resp *http.Response
 
-		log.Printf("Sending HTTP GET to %", contentURL)
+		log.Printf("Sending HTTP GET to %s", contentURL)
 
 		resp, err = this.httpClient.Do(req)
 		if err == nil {

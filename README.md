@@ -1,5 +1,33 @@
 # Github copyright checker
 
+Objective: Checks that valid copyright statements are present in code, checking when a pull request is created/re-opened/updated.
+
+# Checks performed
+
+There are two main classes of things checked:
+- java-like files
+- yaml-like files
+
+For `.java`, `.go`, `.ts`, `.tsx`, and `.js` files, we expect this:
+```
+/* 
+ * Copyright contributors to the Galasa project
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
+```
+
+For `.yaml` and `.sh` files, we expect this:
+```
+#
+# Copyright contributors to the Galasa project
+#
+# SPDX-License-Identifier: EPL-2.0
+#
+```
+
+# Developing and Deploying
+
 This code builds a docker image, which can be deployed to kubernetes.
 
 ## Running the code
