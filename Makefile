@@ -15,7 +15,7 @@ source-code : \
 	./pkg/embedded/resources/build-date.txt 
 	
 ./pkg/embedded/resources/build-date.txt :
-	echo -n "Build date: $(date)" > ./pkg/embedded/resources/build-date.txt
+	date > ./pkg/embedded/resources/build-date.txt
 
 bin/copyright : source-code
 	CGO_ENABLED=0 go build -o bin/copyright ./cmd/githubapp-copyright
