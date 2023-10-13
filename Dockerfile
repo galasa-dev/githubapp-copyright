@@ -5,7 +5,7 @@
 #
 
 ARG dockerRepository
-FROM alpine:3.14
+FROM ${dockerRepository}${dockerRepoSubPath}/alpine:3.14
 
 ARG platform
 
