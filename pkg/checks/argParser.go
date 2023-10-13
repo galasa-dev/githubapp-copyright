@@ -8,6 +8,8 @@ package checks
 import (
 	"errors"
 	"fmt"
+	"log"
+	"strings"
 )
 
 type FieldValuesParsed struct {
@@ -31,6 +33,9 @@ const (
 
 func NewCommandLineArgParserImpl(args []string, console Console) (CommandLineArgParser, error) {
 	var err error = nil
+
+	log.Printf("Command line arguments: %s\n", strings.Join(args, " "))
+
 	parser := new(CommandLineArgParserImpl)
 
 	parser.argSequence, err = NewStringIterator(args)
