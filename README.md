@@ -54,6 +54,18 @@ of a file which is mentioned in a pull request.
 
 The key.pem file should be supplied to any deployment as a secret.
 
+## Running the docker image
+- Create a key.pem file in temp
+  - The contents of this file can be lifted from the `pkg/checks/tokenSupplierMock.go` file
+```
+docker run -p 3000:3000 -v $(pwd)/temp:/temp githubapp-copyright:latest copyright --debug --githubAuthKeyFile /temp/key.pem
+```
+
+Then you could hit the tool with curl:
+```
+curl -X POST http://localhost:3000/githubapp/copyright/event_handler -H "Content-Type: application/json" -d '{"key1":"value1", "key2":"value2"}'
+```
+
 ## License
 See [license file](./LICENSE)
 
