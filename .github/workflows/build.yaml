@@ -66,16 +66,16 @@ jobs:
     - uses: clowdhaus/argo-cd-action/@main
       with:
         version: 2.6.7
-        command: actions
-        options: app actions run github-copyright restart --kind Deployment --resource-name githubappcopyright
+        command: app
+        options: actions run github-copyright restart --kind Deployment --resource-name githubappcopyright
       # Only on main branch builds
       if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
 
     - uses: clowdhaus/argo-cd-action/@main
       with:
         version: 2.6.7
-        command: actions
-        options: app wait github-copyright --resource apps:Deployment:githubappcopyright --health
+        command: app
+        options: wait github-copyright --resource apps:Deployment:githubappcopyright --health
       # Only on main branch builds
       if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
 
