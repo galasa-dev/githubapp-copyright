@@ -30,12 +30,17 @@ jobs:
         name: Coverage html
         path: build/coverage.html
 
-    - name: Upload built binaries
+    - name: Upload built binary for arm64
       uses: actions/upload-artifact@v3
       with:
-        name: Coverage html
-        path: bin
+        name: Built arm64 executable
+        path: bin/copyright
 
+    - name: Upload built binary for amd64
+      uses: actions/upload-artifact@v3
+      with:
+        name: Build amd64 executable
+        path: bin/copyright-amd64
   
     - name: Log in to the Container registry
       uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
@@ -57,5 +62,23 @@ jobs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
+
+    - uses: clowdhaus/argo-cd-action/@main
+      with:
+        version: 2.6.7
+        command: actions
+        options: app actions run github-copyright restart --kind Deployment --resource-name githubappcopyright
+      # Only on main branch builds
+      if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+
+    - uses: clowdhaus/argo-cd-action/@main
+      with:
+        version: 2.6.7
+        command: actions
+        options: app wait github-copyright --resource apps:Deployment:githubappcopyright --health
+      # Only on main branch builds
+      if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+
+
       
   
