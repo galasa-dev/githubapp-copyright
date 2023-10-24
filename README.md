@@ -2,7 +2,7 @@
 
 Objective: Checks that valid copyright statements are present in code, checking when a pull request is created/re-opened/updated.
 
-[![.github/workflows/pr-build.yaml](https://github.com/galasa-dev/githubapp-copyright/actions/workflows/pr-build.yaml/badge.svg)](https://github.com/galasa-dev/githubapp-copyright/actions/workflows/pr-build.yaml)
+[![pr-build](https://github.com/galasa-dev/githubapp-copyright/actions/workflows/build.yaml/badge.svg?branch=main)](https://github.com/galasa-dev/githubapp-copyright/actions/workflows/build.yaml)
 
 # Checks performed
 
