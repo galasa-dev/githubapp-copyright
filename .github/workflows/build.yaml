@@ -42,17 +42,19 @@ jobs:
         name: Build amd64 executable
         path: bin/copyright-amd64
   
+
+
+  containerize:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+
     - name: Log in to the Container registry
       uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-
-  containerize:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
 
     - name: Extract metadata (tags, labels) for Docker
       id: meta
