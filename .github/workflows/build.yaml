@@ -67,7 +67,7 @@ jobs:
       with:
         version: 2.6.7
         command: app
-        options: actions run github-copyright restart --kind Deployment --resource-name githubappcopyright --auth-token ${{ secrets.ARGOCD_CLI_TOKEN }} --server argocd.galasa.dev
+        options: actions run github-copyright restart --kind Deployment --resource-name githubappcopyright --auth-token ${{ secrets.ARGOCD_CLI_TOKEN }} --server argocd.galasa.dev --grpc-web
       # Only on main branch builds
       if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
 
@@ -75,7 +75,7 @@ jobs:
       with:
         version: 2.6.7
         command: app
-        options: wait github-copyright --resource apps:Deployment:githubappcopyright --health --auth-token ${{ secrets.ARGOCD_CLI_TOKEN }} --server argocd.galasa.dev
+        options: wait github-copyright --resource apps:Deployment:githubappcopyright --health --auth-token ${{ secrets.ARGOCD_CLI_TOKEN }} --server argocd.galasa.dev --grpc-web
       # Only on main branch builds
       if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
 
