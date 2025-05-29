@@ -1,37 +1,50 @@
+#
+# Copyright contributors to the Galasa project
+#
+# SPDX-License-Identifier: EPL-2.0
+#
 name: build
-run-name: ${{ github.actor }} 
+
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
+env:
+  REGISTRY: ghcr.io
+  NAMESPACE: ${{ github.repository_owner }}
+  BRANCH: ${{ github.ref_name }}
+
 jobs:
 
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
     - name: Create date of build file
-      run: date > pkg/embedded/resources/build-date.txt
+      run: |
+        date > pkg/embedded/resources/build-date.txt
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: '1.19'
+        go-version: 1.22
 
-    - name: build and unit test
-      run: make all
-    
+    - name: Build and unit test
+      run: |
+        make all
+
     - name: Upload Go test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: Coverage html
         path: build/coverage.html
 
     - name: Upload built binary for arm64
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: Built executables
         path: bin/
@@ -40,56 +53,54 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-    - uses: actions/checkout@v3
-
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       with:
         name: Built executables
         path: bin/
-    
-    - name: Log in to the Container registry
-      uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+
+    - name: Log in to the GitHub Container Registry
+      if: ${{ github.event_name == 'push' }} # Only on main branch builds
+      uses: docker/login-action@v3
+      env: 
+        WRITE_GITHUB_PACKAGES_USERNAME: ${{ vars.WRITE_GITHUB_PACKAGES_USERNAME }}
+        WRITE_GITHUB_PACKAGES_TOKEN: ${{ secrets.WRITE_GITHUB_PACKAGES_TOKEN }}
       with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        registry: ${{ env.REGISTRY }}
+        username: ${{ env.WRITE_GITHUB_PACKAGES_USERNAME }}
+        password: ${{ env.WRITE_GITHUB_PACKAGES_TOKEN }}
 
     - name: Extract metadata (tags, labels) for Docker
       id: meta
-      uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+      uses: docker/metadata-action@v5
       with:
-        images: ghcr.io/galasa-dev/githubapp-copyright
+        images: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/githubapp-copyright
 
     - name: Build and push Docker image
-      uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+      uses: docker/build-push-action@v5
       with:
         context: .
-        push: true
+        push: ${{ github.event_name == 'push' }} # Only push on main branch builds
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-
 
   deploy:
     needs: containerise
     runs-on: ubuntu-latest
-    # Only on main branch builds
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    # Only on main branch builds and skip for forks
+    if: ${{ github.event_name == 'push' && github.repository_owner == 'galasa-dev' }}
     steps:
 
-    - uses: clowdhaus/argo-cd-action/@main
-      with:
-        version: 2.6.7
-        command: app
-        options: actions run github-copyright restart --kind Deployment --resource-name githubappcopyright --auth-token ${{ secrets.ARGOCD_CLI_TOKEN }} --server argocd.galasa.dev --grpc-web
-      
+    - name: Recycle application in ArgoCD
+      env: 
+        ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
+      run: |
+        docker run --env ARGOCD_AUTH_TOKEN=${{ env.ARGOCD_AUTH_TOKEN }} --rm ghcr.io/galasa-dev/argocdcli:main app actions run github-copyright restart --kind Deployment --resource-name githubappcopyright --server argocd.galasa.dev
 
-    - uses: clowdhaus/argo-cd-action/@main
-      with:
-        version: 2.6.7
-        command: app
-        options: wait github-copyright --resource apps:Deployment:githubappcopyright --health --auth-token ${{ secrets.ARGOCD_CLI_TOKEN }} --server argocd.galasa.dev --grpc-web
-
-
-      
-  
+    - name: Wait for app health in ArgoCD
+      env: 
+        ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
+      run: |
+        docker run --env ARGOCD_AUTH_TOKEN=${{ env.ARGOCD_AUTH_TOKEN }} --rm ghcr.io/galasa-dev/argocdcli:main app wait github-copyright --resource apps:Deployment:githubappcopyright --health --server argocd.galasa.dev
